@@ -70,10 +70,13 @@ class MusicPlayer(QMainWindow):
 		self.repeat_mode = 0	# 0=off, 1=song, 2=album
 		self.shuffle_enabled = False
 		self.unshuffled_playlist = []
+		self.remember_position = False
+		self.playback_position_file = self.config_dir / 'playback_position.json'
 
 		self.init_ui()
 		self.load_library()
 		self.load_settings()
+		self.restore_playback_position()
 
 	def init_ui(self):
 		# Main widget and layout
@@ -126,6 +129,16 @@ class MusicPlayer(QMainWindow):
 		self.rescan_btn.setFlat(True)
 		self.rescan_btn.clicked.connect(self.rescan_library)
 		left_controls.addWidget(self.rescan_btn)
+
+		# Remember position toggle button
+		self.remember_position_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color))
+		self.remember_position_btn.setIconSize(self.icon_size)
+		self.remember_position_btn.setToolTip("Remember playback position (Off)")
+		self.remember_position_btn.setFlat(True)
+		self.remember_position_btn.clicked.connect(self.toggle_remember_position)
+		left_controls.addWidget(self.remember_position_btn)
 
 		# Dark/Light Mode button
 		self.darkmode_btn = QPushButton()
@@ -665,6 +678,7 @@ class MusicPlayer(QMainWindow):
 			'repeat_mode': self.repeat_mode,
 			'repeat_mode': self.repeat_mode,
 			'shuffle_enabled': self.shuffle_enabled,
+			'remember_position': self.remember_position,
 			'volume': self.volume_slider.value()
 		}
 
@@ -744,6 +758,15 @@ class MusicPlayer(QMainWindow):
 			else:
 				self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color))
 				self.shuffle_btn.setToolTip("Shuffle Off")
+
+			# Restore remember position state
+			self.remember_position = settings.get('remember_position', False)
+			if self.remember_position:
+				self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg', icon_color))
+				self.remember_position_btn.setToolTip("Remember playback position (On)")
+			else:
+				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color))
+				self.remember_position_btn.setToolTip("Remember playback position (Off)")
 			
 			# Restore selected genre/artist/album/song
 			selected_genre = settings.get('selected_genre')
@@ -1045,8 +1068,22 @@ class MusicPlayer(QMainWindow):
 
 	def closeEvent(self, event):
 		"""Save settings when app closes"""
-		# print("DEBUG - closeEvent called! About to save settings...")
 		self.save_settings()
+		
+		# Save playback position if feature is enabled
+		if self.remember_position and self.current_playlist and self.current_track_index < len(self.current_playlist):
+			position_data = {
+				'song_path': self.current_playlist[self.current_track_index],
+				'position': self.player.position(),
+				'playlist': self.current_playlist,
+				'track_index': self.current_track_index
+			}
+			try:
+				with open(self.playback_position_file, 'w') as f:
+					json.dump(position_data, f, indent=2)
+			except Exception as e:
+				print(f"Error saving playback position: {e}")
+		
 		event.accept()
 
 	def load_icon(self, filename, color=None):
@@ -1224,6 +1261,91 @@ class MusicPlayer(QMainWindow):
 				self.setGeometry(100, 100, 1200, 720)
 		
 		super().changeEvent(event)
+
+	def toggle_remember_position(self):
+			"""Toggle the remember position feature on/off"""
+			self.remember_position = not self.remember_position
+			icon_color = 'white' if self.dark_mode else 'black'
+			
+			if self.remember_position:
+				self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg', icon_color))
+				self.remember_position_btn.setToolTip("Remember playback position (On)")
+			else:
+				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color))
+				self.remember_position_btn.setToolTip("Remember playback position (Off)")
+				# Clear saved position when disabled
+				if self.playback_position_file.exists():
+					self.playback_position_file.unlink()
+			
+			self.save_settings()
+
+	def restore_playback_position(self):
+		"""Restore playback position if feature is enabled"""
+		print(f"DEBUG - Remember position enabled: {self.remember_position}")
+		print(f"DEBUG - Position file exists: {self.playback_position_file.exists()}")
+		
+		if not self.remember_position or not self.playback_position_file.exists():
+			return
+		
+		try:
+			with open(self.playback_position_file, 'r') as f:
+				position_data = json.load(f)
+			
+			print(f"DEBUG - Loaded position data: {position_data.get('song_path')}, position: {position_data.get('position')}")
+			
+			song_path = position_data.get('song_path')
+			position = position_data.get('position', 0)
+			playlist = position_data.get('playlist', [])
+			track_index = position_data.get('track_index', 0)
+			
+			# Verify the song still exists
+			if song_path and Path(song_path).exists():
+				print(f"DEBUG - Song exists, restoring...")
+				self.current_playlist = playlist
+				self.current_track_index = track_index
+				
+				# Populate the song table with the playlist
+				self.populate_song_table_from_playlist()
+				
+				# Store the position to restore after media loads
+				self._pending_seek_position = position
+				
+				# Connect to mediaStatusChanged to seek after loading
+				def on_media_loaded(status):
+					from PyQt6.QtMultimedia import QMediaPlayer
+					if status == QMediaPlayer.MediaStatus.LoadedMedia and hasattr(self, '_pending_seek_position'):
+						print(f"DEBUG - Media loaded, seeking to {self._pending_seek_position}ms")
+						self.player.setPosition(self._pending_seek_position)
+						delattr(self, '_pending_seek_position')
+						# Disconnect this handler
+						self.player.mediaStatusChanged.disconnect(on_media_loaded)
+				
+				self.player.mediaStatusChanged.connect(on_media_loaded)
+				
+				# Load the song
+				self.player.setSource(QUrl.fromLocalFile(song_path))
+				
+				# Update UI
+				from mutagen import File
+				try:
+					audio = File(song_path, easy=True)
+					if audio:
+						artist = audio.get('artist', ['Unknown Artist'])[0]
+						title = audio.get('title', [Path(song_path).stem])[0]
+						self.now_playing_text.setText(f"{artist} - {title} (paused)")
+					else:
+						self.now_playing_text.setText(f"{Path(song_path).stem} (paused)")
+				except:
+					self.now_playing_text.setText(f"{Path(song_path).stem} (paused)")
+				
+				print(f"Restored playback position: {position/1000:.1f}s")
+			else:
+				print(f"DEBUG - Song path doesn't exist: {song_path}")
+		
+		except Exception as e:
+			print(f"Error restoring playback position: {e}")
+			import traceback
+			traceback.print_exc()
 
 if __name__ == '__main__':
 	app = QApplication(sys.argv)
