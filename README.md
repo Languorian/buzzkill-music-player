@@ -27,7 +27,6 @@ launch-windows.bat
 sudo apt install python3-venv
 python3 -m venv venv
 source venv/bin/activate
-cd ../..
 pip install -r requirements.txt
 ```
 launch-linux.sh
