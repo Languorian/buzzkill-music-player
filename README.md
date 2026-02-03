@@ -3,6 +3,8 @@
 A lightweight desktop music player built with Python + PyQt6.
 Browse your library and play audio with a simple interface.
 
+![Screenshot on Windows 11](screenshot-windows.jpg)
+
 ## Requirements
 - Python 3.10+
 - pip
