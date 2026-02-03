@@ -83,6 +83,22 @@ class MusicPlayer(QMainWindow):
 		# Main widget and layout
 		main_widget = QWidget()
 		self.setCentralWidget(main_widget)
+
+		# Apply transparent background to all flat buttons
+		self.setStyleSheet("""
+			QPushButton[flat="true"] {
+				background-color: transparent;
+				border: none;
+			}
+			QPushButton[flat="true"]:hover {
+				background-color: rgba(255, 255, 255, 0.1);
+				border-radius: 4px;
+			}
+			QPushButton[flat="true"]:pressed {
+				background-color: rgba(255, 255, 255, 0.2);
+			}
+		""")
+
 		layout = QVBoxLayout(main_widget)
 
 		#==============================================
@@ -354,8 +370,8 @@ class MusicPlayer(QMainWindow):
 		#==============================================
 		# Song list
 		self.song_table = QTableWidget()
-		self.song_table.setColumnCount(4)
-		self.song_table.setHorizontalHeaderLabels(["Track #", "Title", "Year", "Time"])
+		self.song_table.setColumnCount(7)
+		self.song_table.setHorizontalHeaderLabels(["Track #", "Title", "Artist", "Album", "Year", "Time", "Genre"])
 		self.song_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 		self.song_table.verticalHeader().setVisible(False)  # Remove row numbers
 		self.song_table.itemDoubleClicked.connect(self.on_song_double_clicked)
@@ -534,6 +550,17 @@ class MusicPlayer(QMainWindow):
 						minutes = int(duration // 60)
 						seconds = int(duration % 60)
 						time_str = f"{minutes}:{seconds:02d}"
+
+						# Artist
+						artist_name = audio.get('artist', [''])[0] if audio.get('artist') else ''
+
+						# Album
+						album_name = audio.get('album', [''])[0] if audio.get('album') else ''
+
+						# Genre
+						genre_name = audio.get('genre', [''])[0] if audio.get('genre') else ''
+
+
 					else:
 						track_num = ''
 						title = Path(song_path).stem
@@ -542,14 +569,20 @@ class MusicPlayer(QMainWindow):
 				except:
 					track_num = ''
 					title = Path(song_path).stem
+					artist_name = ''
+					album_name = ''
 					year = ''
 					time_str = ''
+					genre_name = ''
 
 				# Populate columns
 				self.song_table.setItem(i, 0, QTableWidgetItem(str(track_num)))
 				self.song_table.setItem(i, 1, QTableWidgetItem(title))
-				self.song_table.setItem(i, 2, QTableWidgetItem(str(year)))
-				self.song_table.setItem(i, 3, QTableWidgetItem(time_str))
+				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
+				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
+				self.song_table.setItem(i, 4, QTableWidgetItem(str(year)))
+				self.song_table.setItem(i, 5, QTableWidgetItem(time_str))
+				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
 
 				# Store the file path invisibly for playback
 				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, song_path)
@@ -681,7 +714,10 @@ class MusicPlayer(QMainWindow):
 				self.song_table.columnWidth(0),
 				self.song_table.columnWidth(1),
 				self.song_table.columnWidth(2),
-				self.song_table.columnWidth(3)
+				self.song_table.columnWidth(3),
+				self.song_table.columnWidth(4),
+				self.song_table.columnWidth(5),
+				self.song_table.columnWidth(6)
 			],
 			'splitter_sizes': self.splitter.sizes(),
 			'window_geometry': [self.x(), self.y(), self.width(), self.height()],
@@ -709,8 +745,11 @@ class MusicPlayer(QMainWindow):
 			# Set default column widths
 			self.song_table.setColumnWidth(0, 80)   # Track #
 			self.song_table.setColumnWidth(1, 300)  # Title
-			self.song_table.setColumnWidth(2, 80)   # Year
-			self.song_table.setColumnWidth(3, 80)   # Time
+			self.song_table.setColumnWidth(2, 200)  # Artist
+			self.song_table.setColumnWidth(3, 200)  # Album
+			self.song_table.setColumnWidth(4, 80)   # Year
+			self.song_table.setColumnWidth(5, 80)   # Time
+			self.song_table.setColumnWidth(6, 150)  # Genre
 			return
 
 		try:
@@ -720,7 +759,7 @@ class MusicPlayer(QMainWindow):
 			#print(f"DEBUG - Loaded settings: {settings}")  # ADD THIS
 
 			# Restore column widths
-			widths = settings.get('column_widths', [80, 300, 80, 80])
+			widths = settings.get('column_widths', [80, 300, 200, 200, 80, 80, 150])
 			for i, width in enumerate(widths):
 				self.song_table.setColumnWidth(i, width)
 
@@ -988,6 +1027,16 @@ class MusicPlayer(QMainWindow):
 						minutes = int(duration // 60)
 						seconds = int(duration % 60)
 						time_str = f"{minutes}:{seconds:02d}"
+
+						# Artist
+						artist_name = audio.get('artist', [''])[0] if audio.get('artist') else ''
+
+						# Album
+						album_name = audio.get('album', [''])[0] if audio.get('album') else ''
+
+						# Genre
+						genre_name = audio.get('genre', [''])[0] if audio.get('genre') else ''
+
 					else:
 						track_num = ''
 						title = Path(song_path).stem
@@ -1002,8 +1051,11 @@ class MusicPlayer(QMainWindow):
 				# Populate columns
 				self.song_table.setItem(i, 0, QTableWidgetItem(str(track_num)))
 				self.song_table.setItem(i, 1, QTableWidgetItem(title))
-				self.song_table.setItem(i, 2, QTableWidgetItem(str(year)))
-				self.song_table.setItem(i, 3, QTableWidgetItem(time_str))
+				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
+				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
+				self.song_table.setItem(i, 4, QTableWidgetItem(str(year)))
+				self.song_table.setItem(i, 5, QTableWidgetItem(time_str))
+				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
 
 				# Store the file path invisibly for playback
 				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, song_path)
