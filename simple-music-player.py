@@ -98,19 +98,22 @@ class MusicPlayer(QMainWindow):
 		self.setCentralWidget(main_widget)
 
 		# Apply transparent background to all flat buttons
-		self.setStyleSheet("""
-			QPushButton[flat="true"] {
-				background-color: transparent;
-				border: none;
-			}
-			QPushButton[flat="true"]:hover {
-				background-color: rgba(255, 255, 255, 0.1);
-				border-radius: 4px;
-			}
-			QPushButton[flat="true"]:pressed {
-				background-color: rgba(255, 255, 255, 0.2);
-			}
-		""")
+		# self.setStyleSheet("""
+		# 	QPushButton[flat="true"] {
+		# 		background-color: transparent;
+		# 		border: none;
+		# 	}
+		# 	QPushButton[flat="true"]:hover {
+		# 		background-color: rgba(255, 255, 255, 0.1);
+		# 		border-radius: 4px;
+		# 	}
+		# 	QPushButton[flat="true"]:pressed {
+		# 		background-color: rgba(255, 255, 255, 0.2);
+		# 	}
+		# """)
+
+		# Apply initial theme
+		self.apply_theme()
 
 		layout = QVBoxLayout(main_widget)
 
@@ -835,6 +838,9 @@ class MusicPlayer(QMainWindow):
 				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color))
 				self.remember_position_btn.setToolTip("Remember playback position (Off)")
 
+			# Apply theme after loading all settings
+			self.apply_theme()
+
 			# Restore selected genre/artist/album/song
 			selected_genre = settings.get('selected_genre')
 			selected_artist = settings.get('selected_artist')
@@ -1199,10 +1205,132 @@ class MusicPlayer(QMainWindow):
 		self.dark_mode = not self.dark_mode
 		icon_color = 'white' if self.dark_mode else 'black'
 
-		# Reload all icons with new color
+		# Reload all button icons with new color
 		self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color))
-		#self.play_btn.setIcon(self.load_icon('play.svg', icon_color))
-		# ... etc for all buttons
+		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color))
+		self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color))
+		
+		# Update theme toggle button icon
+		theme_icon = 'mode-light.svg' if self.dark_mode else 'mode-dark.svg'
+		self.darkmode_btn.setIcon(self.load_icon(theme_icon, icon_color))
+		
+		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color))
+		self.next_btn.setIcon(self.load_icon('next.svg', icon_color))
+		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color))
+		
+		# Update play/pause button based on current state
+		if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color))
+		else:
+			self.play_btn.setIcon(self.load_icon('play.svg', icon_color))
+		
+		# Update volume/mute button
+		if self.is_muted or self.volume_slider.value() == 0:
+			self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color))
+		else:
+			self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color))
+		
+		# Update repeat button based on mode
+		if self.repeat_mode == 0:
+			self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color))
+		elif self.repeat_mode == 1:
+			self.repeat_btn.setIcon(self.load_icon('repeat-song.svg', icon_color))
+		elif self.repeat_mode == 2:
+			self.repeat_btn.setIcon(self.load_icon('repeat-album.svg', icon_color))
+		
+		# Update shuffle button
+		if self.shuffle_enabled:
+			self.shuffle_btn.setIcon(self.load_icon('shuffle-on.svg', icon_color))
+		else:
+			self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color))
+		
+		# Apply color scheme
+		self.apply_theme()
+
+	def apply_theme(self):
+		"""Apply dark or light theme colors to the application"""
+		if self.dark_mode:
+			# Dark mode colors
+			bg_color = "#1e1e1e"
+			secondary_bg = "#2d2d2d"
+			text_color = "#ffffff"
+			secondary_text = "#b0b0b0"
+			border_color = "#3d3d3d"
+		else:
+			# Light mode colors
+			bg_color = "#e8e8e8"
+			secondary_bg = "#f5f5f5"
+			text_color = "#1a1a1a"
+			secondary_text = "#4a4a4a"
+			border_color = "#c0c0c0"
+		
+		# Apply stylesheet
+		self.setStyleSheet(f"""
+			QMainWindow {{
+				background-color: {bg_color};
+				color: {text_color};
+			}}
+			QWidget {{
+				background-color: {bg_color};
+				color: {text_color};
+			}}
+			QPushButton[flat="true"] {{
+				background-color: transparent;
+				border: none;
+				color: {text_color};
+			}}
+			QPushButton[flat="true"]:hover {{
+				background-color: rgba(128, 128, 128, 0.2);
+				border-radius: 4px;
+			}}
+			QPushButton[flat="true"]:pressed {{
+				background-color: rgba(128, 128, 128, 0.3);
+			}}
+			QTreeWidget {{
+				background-color: {secondary_bg};
+				color: {text_color};
+				border: 1px solid {border_color};
+			}}
+			QTreeWidget::item:selected {{
+				background-color: {'#0d47a1' if self.dark_mode else '#1976d2'};
+			}}
+			QTableWidget {{
+				background-color: {secondary_bg};
+				color: {text_color};
+				border: 1px solid {border_color};
+				gridline-color: {border_color};
+			}}
+			QTableWidget::item:selected {{
+				background-color: {'#0d47a1' if self.dark_mode else '#1976d2'};
+			}}
+			QHeaderView::section {{
+				background-color: {bg_color};
+				color: {text_color};
+				border: 1px solid {border_color};
+				padding: 4px;
+			}}
+			QLabel {{
+				color: {text_color};
+			}}
+			QSlider::groove:horizontal {{
+				background: {border_color};
+				height: 4px;
+				border-radius: 2px;
+			}}
+			QSlider::handle:horizontal {{
+				background: {text_color};
+				width: 12px;
+				margin: -4px 0;
+				border-radius: 6px;
+			}}
+			QSlider::sub-page:horizontal {{
+				background: {'#1976d2' if self.dark_mode else '#2196f3'};
+				border-radius: 2px;
+			}}
+			QSplitter::handle {{
+				background-color: {border_color};
+			}}
+		""")
 
 	def toggle_mute(self):
 		"""Toggle mute on/off"""
@@ -1441,6 +1569,11 @@ if __name__ == '__main__':
 			print(f"Could not set App User Model ID: {e}")
 
 	app = QApplication(sys.argv)
+
+	# Set application-wide font size
+	font = app.font()
+	font.setPointSize(11)
+	app.setFont(font)
 
 	player = MusicPlayer()
 
