@@ -1332,11 +1332,11 @@ class MusicPlayer(QMainWindow):
 					if audio:
 						artist = audio.get('artist', ['Unknown Artist'])[0]
 						title = audio.get('title', [Path(song_path).stem])[0]
-						self.now_playing_text.setText(f"{artist} - {title} (paused)")
+						self.now_playing_text.setText(f"{artist} - {title}")
 					else:
-						self.now_playing_text.setText(f"{Path(song_path).stem} (paused)")
+						self.now_playing_text.setText(f"{Path(song_path).stem}")
 				except:
-					self.now_playing_text.setText(f"{Path(song_path).stem} (paused)")
+					self.now_playing_text.setText(f"{Path(song_path).stem}")
 				
 				print(f"Restored playback position: {position/1000:.1f}s")
 			else:
