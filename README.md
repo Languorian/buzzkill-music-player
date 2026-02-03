@@ -1,6 +1,6 @@
 # Simple Music Player
 
-A lightweight desktop music player built with Python + PyQt6.
+A lightweight desktop music player for Linux and Windows built with Python + PyQt6.
 Browse your library and play audio with a simple interface.
 
 ![Screenshot on Windows 11](screenshot-windows.jpg)
@@ -11,7 +11,7 @@ Browse your library and play audio with a simple interface.
 - Git (optional, for cloning)
 
 ## Setup
-Clone or download the project, then open terminal/command-prompt in the project folder (the folder containing simple-music-player.py).
+Clone or download the project, then open terminal in the project folder (the folder containing simple-music-player.py).
 
 You should see:
 ```
@@ -22,14 +22,13 @@ launch-linux.sh
 launch-windows.bat
 ```
 
-### Linux (Kubuntu / Ubuntu / Debian)
+### Linux (Ubuntu / Debian)
 ```
-sudo apt install python3-venv
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
-launch-linux.sh
+Close the terminal and run **launch-linux.sh**
 
 ### Windows
 ```
@@ -39,7 +38,7 @@ activate
 cd ../..
 pip install -r requirements.txt
 ```
-launch-windows.bat
+Close the terminal and run **launch-windows.bat**
 
 ## Instructions
 - On first launch, click the folder icon in the top-left to choose your music library folder (example: C:\Users\CoolGuy\Music). The app may freeze for a few seconds as it scans your files. When finished, the library will populate with your music.
@@ -49,5 +48,8 @@ launch-windows.bat
 
 - The Bookmark button tells the app to remember the playback position of your music. When enabled, you can close the app and maintain playback position the next time you launch the app.
 
-- The Dark/Light theme button is unfinished and can be ignored.
-
+## Troubleshooting
+If Linux users get an error when running the venv command, you probably need to install python3-venv: 
+```
+sudo apt install python3-venv
+```
