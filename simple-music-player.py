@@ -26,7 +26,7 @@ class MusicPlayer(QMainWindow):
 	def __init__(self):
 		super().__init__()
 
-		self.setWindowTitle("Languorian's Simple Music Player")
+		self.setWindowTitle("BUZZKILL by Languorian")
 
 		# Default size (will be overridden by load_settings if saved geometry exists)
 		self.setGeometry(100, 100, 1200, 720)
@@ -1559,7 +1559,7 @@ if __name__ == '__main__':
 		try:
 			import ctypes
 			# Set a unique App User Model ID
-			app_id = 'Languorian.SimpleMusicPlayer.1.0'
+			app_id = 'Languorian.Buzzkill.1.0'
 			ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
 		except Exception as e:
 			print(f"Could not set App User Model ID: {e}")

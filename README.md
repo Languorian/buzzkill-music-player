@@ -1,7 +1,6 @@
-# Simple Music Player
+# BUZZKILL Music Player
 
-A lightweight desktop music player for ***Linux*** and ***Windows*** built with Python + PyQt6.
-Browse your library and play audio with a simple interface.
+Buzzkill is a poor MusicBee alternative for ***Linux*** (and ***Windows*** if, for some reason, you don't want to use MusicBee -- but why?). A lightweight desktop music player built with Python + PyQt6. Browse your library and play audio with a simple interface.
 
 ![Screenshot on Windows 11](screenshot-windows.jpg)
 
@@ -11,11 +10,11 @@ Browse your library and play audio with a simple interface.
 - Git (optional, for cloning)
 
 ## Setup
-Clone or download the project, then open terminal in the project folder (the folder containing simple-music-player.py).
+Clone or download the project, then open terminal in the project folder (the folder containing buzzkill-music-player.py).
 
 You should see:
 ```
-simple-music-player.py
+buzzkill-music-player.py
 icons/
 requirements.txt
 launch-linux.sh
