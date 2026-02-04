@@ -39,7 +39,7 @@ class MusicPlayer(QMainWindow):
 		self.watched_folders = []
 
 		# self.app_dir = Path(__file__).parent.resolve()
-		
+
 		# More robust cross-platform solution
 		try:
 			# Try to get the script's directory
@@ -86,6 +86,7 @@ class MusicPlayer(QMainWindow):
 		self.shuffle_enabled = False
 		self.unshuffled_playlist = []
 		self.remember_position = False
+		self.rounded_buttons = True
 
 		self.init_ui()
 		self.load_library()
@@ -146,7 +147,7 @@ class MusicPlayer(QMainWindow):
 		# Add folder button
 		self.add_folder_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color))
+		self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color, use_style_path=True))
 		self.add_folder_btn.setIconSize(self.icon_size)
 		self.add_folder_btn.setToolTip("Add folder to library")
 		self.add_folder_btn.setFlat(True)
@@ -156,7 +157,7 @@ class MusicPlayer(QMainWindow):
 		# Rescan library button
 		self.rescan_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color))
+		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color, use_style_path=True))
 		self.rescan_btn.setIconSize(self.icon_size)
 		self.rescan_btn.setToolTip("Rescan library for new files")
 		self.rescan_btn.setFlat(True)
@@ -166,17 +167,28 @@ class MusicPlayer(QMainWindow):
 		# Remember position toggle button
 		self.remember_position_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color))
+		self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color, use_style_path=True))
 		self.remember_position_btn.setIconSize(self.icon_size)
 		self.remember_position_btn.setToolTip("Remember playback position (Off)")
 		self.remember_position_btn.setFlat(True)
 		self.remember_position_btn.clicked.connect(self.toggle_remember_position)
 		left_controls.addWidget(self.remember_position_btn)
 
+		# Button style toggle button (straight/rounded)
+		self.button_style_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		style_icon = 'rounded.svg' if self.rounded_buttons else 'straight.svg'
+		self.button_style_btn.setIcon(self.load_icon(style_icon, icon_color, use_style_path=False))
+		self.button_style_btn.setIconSize(self.icon_size)
+		self.button_style_btn.setToolTip("Toggle button style (Rounded/Straight)")
+		self.button_style_btn.setFlat(True)
+		self.button_style_btn.clicked.connect(self.toggle_button_style)
+		left_controls.addWidget(self.button_style_btn)
+
 		# Dark/Light Mode button
 		self.darkmode_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.darkmode_btn.setIcon(self.load_icon('mode-dark.svg', icon_color))
+		self.darkmode_btn.setIcon(self.load_icon('mode-dark.svg', icon_color, use_style_path=False))
 		self.darkmode_btn.setIconSize(self.icon_size)
 		self.darkmode_btn.setToolTip("Toggle dark/light mode")
 		self.darkmode_btn.setFlat(True)
@@ -196,7 +208,7 @@ class MusicPlayer(QMainWindow):
 		# Previous track button
 		self.prev_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color))
+		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
 		self.prev_btn.setIconSize(self.icon_size)
 		self.prev_btn.setToolTip("Go to previous track")
 		self.prev_btn.setFlat(True)
@@ -206,7 +218,7 @@ class MusicPlayer(QMainWindow):
 		# Play/Pause button
 		self.play_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.play_btn.setIcon(self.load_icon('play.svg', icon_color))
+		self.play_btn.setIcon(self.load_icon('play.svg', icon_color, use_style_path=True))
 		self.play_btn.setIconSize(self.icon_size)
 		self.play_btn.setToolTip("Play/Pause")
 		self.play_btn.setFlat(True)
@@ -216,7 +228,7 @@ class MusicPlayer(QMainWindow):
 		# Stop button
 		self.stop_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color))
+		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
 		self.stop_btn.setIconSize(self.icon_size)
 		self.stop_btn.setToolTip("Stop the current playing track")
 		self.stop_btn.setFlat(True)
@@ -226,7 +238,7 @@ class MusicPlayer(QMainWindow):
 		# Next track button
 		self.next_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.next_btn.setIcon(self.load_icon('next.svg', icon_color))
+		self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
 		self.next_btn.setIconSize(self.icon_size)
 		self.next_btn.setToolTip("Go to next track")
 		self.next_btn.setFlat(True)
@@ -249,7 +261,7 @@ class MusicPlayer(QMainWindow):
 		# Volume mute button
 		self.mute_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color))
+		self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color, use_style_path=True))
 		self.mute_btn.setIconSize(self.icon_size)
 		self.mute_btn.setToolTip("Mute/Unmute")
 		self.mute_btn.setFlat(True)
@@ -268,7 +280,7 @@ class MusicPlayer(QMainWindow):
 		# Repeat button
 		self.repeat_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color))
+		self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color, use_style_path=False))
 		self.repeat_btn.setIconSize(self.icon_size)
 		self.repeat_btn.setToolTip("Repeat/Loop (Off, Song, Album)")
 		self.repeat_btn.setFlat(True)
@@ -278,7 +290,7 @@ class MusicPlayer(QMainWindow):
 		# Shuffle button
 		self.shuffle_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color))
+		self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color, use_style_path=False))
 		self.shuffle_btn.setIconSize(self.icon_size)
 		self.shuffle_btn.setToolTip("Shuffle")
 		self.shuffle_btn.setFlat(True)
@@ -625,7 +637,7 @@ class MusicPlayer(QMainWindow):
 
 			self.player.setSource(QUrl.fromLocalFile(file_path))
 			self.player.play()
-			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color))
+			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color, use_style_path=True))
 			self.play_btn.setToolTip("Pause")
 
 			# Update now playing display
@@ -651,11 +663,11 @@ class MusicPlayer(QMainWindow):
 
 		if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
 			self.player.pause()
-			self.play_btn.setIcon(self.load_icon('play.svg', icon_color))
+			self.play_btn.setIcon(self.load_icon('play.svg', icon_color, use_style_path=True))
 			self.play_btn.setToolTip("Play")
 		else:
 			self.player.play()
-			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color))
+			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color, use_style_path=True))
 			self.play_btn.setToolTip("Pause")
 
 	def stop(self):
@@ -663,7 +675,7 @@ class MusicPlayer(QMainWindow):
 		icon_color = 'white' if self.dark_mode else 'black'
 
 		self.player.stop()
-		self.play_btn.setIcon(self.load_icon('play.svg', icon_color))
+		self.play_btn.setIcon(self.load_icon('play.svg', icon_color, use_style_path=True))
 		self.play_btn.setToolTip("Play")
 		self.now_playing_text.setText("---")
 
@@ -743,10 +755,10 @@ class MusicPlayer(QMainWindow):
 			'selected_album': album_item.text(0) if album_item else None,
 			'selected_song': selected_song_path,
 			'repeat_mode': self.repeat_mode,
-			'repeat_mode': self.repeat_mode,
 			'shuffle_enabled': self.shuffle_enabled,
 			'remember_position': self.remember_position,
-			'volume': self.volume_slider.value()
+			'volume': self.volume_slider.value(),
+			'rounded_buttons': self.rounded_buttons
 		}
 
 		try:
@@ -800,6 +812,9 @@ class MusicPlayer(QMainWindow):
 			self.volume_slider.setValue(volume)
 			self.audio_output.setVolume(volume / 100.0)
 
+			# Restore button style
+			self.rounded_buttons = settings.get('rounded_buttons', True)
+
 			# Restore repeat mode
 			self.repeat_mode = settings.get('repeat_mode', 0)
 			icon_color = 'white' if self.dark_mode else 'black'
@@ -807,39 +822,62 @@ class MusicPlayer(QMainWindow):
 			if self.repeat_mode == 0:
 				self.repeat_song = False
 				self.repeat_album = False
-				self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color))
+				self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color, use_style_path=False))
 				self.repeat_btn.setToolTip("Repeat Off")
 			elif self.repeat_mode == 1:
 				self.repeat_song = True
 				self.repeat_album = False
-				self.repeat_btn.setIcon(self.load_icon('repeat-song.svg', icon_color))
+				self.repeat_btn.setIcon(self.load_icon('repeat-song.svg', icon_color, use_style_path=False))
 				self.repeat_btn.setToolTip("Repeat Song")
 			elif self.repeat_mode == 2:
 				self.repeat_song = False
 				self.repeat_album = True
-				self.repeat_btn.setIcon(self.load_icon('repeat-album.svg', icon_color))
+				self.repeat_btn.setIcon(self.load_icon('repeat-album.svg', icon_color, use_style_path=False))
 				self.repeat_btn.setToolTip("Repeat Album")
 
 			# Restore shuffle state
 			self.shuffle_enabled = settings.get('shuffle_enabled', False)
 			if self.shuffle_enabled:
-				self.shuffle_btn.setIcon(self.load_icon('shuffle-on.svg', icon_color))
+				self.shuffle_btn.setIcon(self.load_icon('shuffle-on.svg', icon_color, use_style_path=False))
 				self.shuffle_btn.setToolTip("Shuffle On")
 			else:
-				self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color))
+				self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color, use_style_path=False))
 				self.shuffle_btn.setToolTip("Shuffle Off")
 
 			# Restore remember position state
 			self.remember_position = settings.get('remember_position', False)
 			if self.remember_position:
-				self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg', icon_color))
+				self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg', icon_color, use_style_path=True))
 				self.remember_position_btn.setToolTip("Remember playback position (On)")
 			else:
-				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color))
+				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color, use_style_path=True))
 				self.remember_position_btn.setToolTip("Remember playback position (Off)")
 
 			# Apply theme after loading all settings
 			self.apply_theme()
+
+			# Reload all style-affected icons with the restored button style
+			self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color, use_style_path=True))
+			self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color, use_style_path=True))
+			self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
+			self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
+			self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
+
+			# Update play/pause based on state
+			if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+				self.play_btn.setIcon(self.load_icon('pause.svg', icon_color, use_style_path=True))
+			else:
+				self.play_btn.setIcon(self.load_icon('play.svg', icon_color, use_style_path=True))
+
+			# Update volume/mute button
+			if self.is_muted or self.volume_slider.value() == 0:
+				self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color, use_style_path=True))
+			else:
+				self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color, use_style_path=True))
+
+			# Update button style toggle icon
+			style_icon = 'rounded.svg' if self.rounded_buttons else 'straight.svg'
+			self.button_style_btn.setIcon(self.load_icon(style_icon, icon_color, use_style_path=False))
 
 			# Restore selected genre/artist/album/song
 			selected_genre = settings.get('selected_genre')
@@ -907,11 +945,11 @@ class MusicPlayer(QMainWindow):
 		# Update mute state and icon based on slider value
 		if value == 0:
 			self.is_muted = True
-			self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color))
+			self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color, use_style_path=True))
 			self.mute_btn.setToolTip("Unmute")
 		else:
 			self.is_muted = False
-			self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color))
+			self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color, use_style_path=True))
 			self.mute_btn.setToolTip("Mute")
 
 		self.save_settings()
@@ -1172,11 +1210,22 @@ class MusicPlayer(QMainWindow):
 
 		event.accept()
 
-	def load_icon(self, filename, color=None):
+	def load_icon(self, filename, color=None, use_style_path=True):
 		"""Load an SVG icon and optionally recolor it"""
 
 		# Use icons directory relative to script location (portable)
-		icon_path = self.app_dir / 'icons' / filename
+		# icon_path = self.app_dir / 'icons' / filename
+		# if not icon_path.exists():
+		# 	print(f"Icon not found: {icon_path}")
+		# 	return QIcon()
+		# Determine the icon path based on whether it should use style-specific folder
+		if use_style_path:
+			style_folder = 'rounded' if self.rounded_buttons else 'straight'
+			icon_path = self.app_dir / 'icons' / style_folder / filename
+		else:
+			# Use icons directory relative to script location (portable)
+			icon_path = self.app_dir / 'icons' / filename
+
 		if not icon_path.exists():
 			print(f"Icon not found: {icon_path}")
 			return QIcon()
@@ -1206,46 +1255,80 @@ class MusicPlayer(QMainWindow):
 		icon_color = 'white' if self.dark_mode else 'black'
 
 		# Reload all button icons with new color
-		self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color))
-		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color))
-		self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color))
-		
+		self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color, use_style_path=True))
+		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color, use_style_path=True))
+		self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color, use_style_path=True))
+
+		style_icon = 'rounded.svg' if self.rounded_buttons else 'straight.svg'
+		self.button_style_btn.setIcon(self.load_icon(style_icon, icon_color, use_style_path=False))
+
 		# Update theme toggle button icon
-		theme_icon = 'mode-light.svg' if self.dark_mode else 'mode-dark.svg'
-		self.darkmode_btn.setIcon(self.load_icon(theme_icon, icon_color))
-		
-		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color))
-		self.next_btn.setIcon(self.load_icon('next.svg', icon_color))
-		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color))
-		
+		theme_icon = 'mode-dark.svg' if self.dark_mode else 'mode-light.svg'
+		self.darkmode_btn.setIcon(self.load_icon(theme_icon, icon_color, use_style_path=False))
+
+		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
+		self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
+		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
+
 		# Update play/pause button based on current state
 		if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color))
+			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color, use_style_path=True))
 		else:
-			self.play_btn.setIcon(self.load_icon('play.svg', icon_color))
-		
+			self.play_btn.setIcon(self.load_icon('play.svg', icon_color, use_style_path=True))
+
 		# Update volume/mute button
 		if self.is_muted or self.volume_slider.value() == 0:
-			self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color))
+			self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color, use_style_path=True))
 		else:
-			self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color))
-		
+			self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color, use_style_path=True))
+
 		# Update repeat button based on mode
 		if self.repeat_mode == 0:
-			self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color))
+			self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color, use_style_path=False))
 		elif self.repeat_mode == 1:
-			self.repeat_btn.setIcon(self.load_icon('repeat-song.svg', icon_color))
+			self.repeat_btn.setIcon(self.load_icon('repeat-song.svg', icon_color, use_style_path=False))
 		elif self.repeat_mode == 2:
-			self.repeat_btn.setIcon(self.load_icon('repeat-album.svg', icon_color))
-		
+			self.repeat_btn.setIcon(self.load_icon('repeat-album.svg', icon_color, use_style_path=False))
+
 		# Update shuffle button
 		if self.shuffle_enabled:
-			self.shuffle_btn.setIcon(self.load_icon('shuffle-on.svg', icon_color))
+			self.shuffle_btn.setIcon(self.load_icon('shuffle-on.svg', icon_color, use_style_path=False))
 		else:
-			self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color))
-		
+			self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color, use_style_path=False))
+
 		# Apply color scheme
 		self.apply_theme()
+
+	def toggle_button_style(self):
+		"""Toggle between straight and rounded button icons"""
+		self.rounded_buttons = not self.rounded_buttons
+		icon_color = 'white' if self.dark_mode else 'black'
+
+		# Update the toggle button itself
+		style_icon = 'rounded.svg' if self.rounded_buttons else 'straight.svg'
+		self.button_style_btn.setIcon(self.load_icon(style_icon, icon_color, use_style_path=False))
+
+		# Reload all style-affected icons
+		self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color, use_style_path=True))
+		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color, use_style_path=True))
+		self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color, use_style_path=True))
+		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
+		self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
+		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
+
+		# Update play/pause button based on current state
+		if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color, use_style_path=True))
+		else:
+			self.play_btn.setIcon(self.load_icon('play.svg', icon_color, use_style_path=True))
+
+		# Update volume/mute button
+		if self.is_muted or self.volume_slider.value() == 0:
+			self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color, use_style_path=True))
+		else:
+			self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color, use_style_path=True))
+
+		self.save_settings()
 
 	def apply_theme(self):
 		"""Apply dark or light theme colors to the application"""
@@ -1263,7 +1346,7 @@ class MusicPlayer(QMainWindow):
 			text_color = "#1a1a1a"
 			secondary_text = "#4a4a4a"
 			border_color = "#c0c0c0"
-		
+
 		# Apply stylesheet
 		self.setStyleSheet(f"""
 			QMainWindow {{
@@ -1340,14 +1423,14 @@ class MusicPlayer(QMainWindow):
 			# Unmute - restore previous volume
 			self.is_muted = False
 			self.volume_slider.setValue(self.volume_before_mute)
-			self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color))
+			self.mute_btn.setIcon(self.load_icon('volume.svg', icon_color, use_style_path=True))
 			self.mute_btn.setToolTip("Mute")
 		else:
 			# Mute - save current volume and set to 0
 			self.is_muted = True
 			self.volume_before_mute = self.volume_slider.value()
 			self.volume_slider.setValue(0)
-			self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color))
+			self.mute_btn.setIcon(self.load_icon('volume-mute.svg', icon_color, use_style_path=True))
 			self.mute_btn.setToolTip("Unmute")
 
 	def cycle_repeat_mode(self):
@@ -1360,19 +1443,19 @@ class MusicPlayer(QMainWindow):
 			# Repeat off
 			self.repeat_song = False
 			self.repeat_album = False
-			self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color))
+			self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color, use_style_path=False))
 			self.repeat_btn.setToolTip("Repeat Off")
 		elif self.repeat_mode == 1:
 			# Repeat song
 			self.repeat_song = True
 			self.repeat_album = False
-			self.repeat_btn.setIcon(self.load_icon('repeat-song.svg', icon_color))
+			self.repeat_btn.setIcon(self.load_icon('repeat-song.svg', icon_color, use_style_path=False))
 			self.repeat_btn.setToolTip("Repeat Song")
 		elif self.repeat_mode == 2:
 			# Repeat album
 			self.repeat_song = False
 			self.repeat_album = True
-			self.repeat_btn.setIcon(self.load_icon('repeat-album.svg', icon_color))
+			self.repeat_btn.setIcon(self.load_icon('repeat-album.svg', icon_color, use_style_path=False))
 			self.repeat_btn.setToolTip("Repeat Album")
 
 		self.save_settings()
@@ -1406,7 +1489,7 @@ class MusicPlayer(QMainWindow):
 
 		if self.shuffle_enabled:
 			# Shuffle on
-			self.shuffle_btn.setIcon(self.load_icon('shuffle-on.svg', icon_color))
+			self.shuffle_btn.setIcon(self.load_icon('shuffle-on.svg', icon_color, use_style_path=False))
 			self.shuffle_btn.setToolTip("Shuffle On")
 
 			# Save original playlist order
@@ -1418,7 +1501,7 @@ class MusicPlayer(QMainWindow):
 				self.current_track_index = 0
 		else:
 			# Shuffle off
-			self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color))
+			self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color, use_style_path=False))
 			self.shuffle_btn.setToolTip("Shuffle Off")
 
 			# Restore original order
@@ -1477,10 +1560,10 @@ class MusicPlayer(QMainWindow):
 			icon_color = 'white' if self.dark_mode else 'black'
 
 			if self.remember_position:
-				self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg', icon_color))
+				self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg', icon_color, use_style_path=True))
 				self.remember_position_btn.setToolTip("Remember playback position (On)")
 			else:
-				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color))
+				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color, use_style_path=True))
 				self.remember_position_btn.setToolTip("Remember playback position (Off)")
 				# Clear saved position when disabled
 				if self.playback_position_file.exists():

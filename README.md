@@ -1,6 +1,6 @@
 # Simple Music Player
 
-A lightweight desktop music player for Linux and Windows built with Python + PyQt6.
+A lightweight desktop music player for ***Linux*** and ***Windows*** built with Python + PyQt6.
 Browse your library and play audio with a simple interface.
 
 ![Screenshot on Windows 11](screenshot-windows.jpg)
@@ -49,7 +49,10 @@ Close the terminal and run **launch-windows.bat**
 - The Bookmark button tells the app to remember the playback position of your music. When enabled, you can close the app and maintain playback position the next time you launch the app.
 
 ## Troubleshooting
-If Linux users get an error when running the venv command, you probably need to install python3-venv: 
+If Linux users get an error when running the venv command, you *may* need to install python3-venv:
 ```
 sudo apt install python3-venv
 ```
+
+## Special Thanks
+Unicons by [Flaticon](https://www.flaticon.com/uicons).
