@@ -15,9 +15,7 @@ from PyQt6.QtCore import Qt, QUrl, QSize
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 class ClickableSlider(QSlider):
-	"""Slider that jumps to position when clicked"""
 	def mousePressEvent(self, event):
-		"""Jump to click position"""
 		if event.button() == Qt.MouseButton.LeftButton:
 			value = QSlider.minimum(self) + ((QSlider.maximum(self) - QSlider.minimum(self)) * event.position().x()) / self.width()
 			self.setValue(int(value))
@@ -97,21 +95,6 @@ class MusicPlayer(QMainWindow):
 		# Main widget and layout
 		main_widget = QWidget()
 		self.setCentralWidget(main_widget)
-
-		# Apply transparent background to all flat buttons
-		# self.setStyleSheet("""
-		# 	QPushButton[flat="true"] {
-		# 		background-color: transparent;
-		# 		border: none;
-		# 	}
-		# 	QPushButton[flat="true"]:hover {
-		# 		background-color: rgba(255, 255, 255, 0.1);
-		# 		border-radius: 4px;
-		# 	}
-		# 	QPushButton[flat="true"]:pressed {
-		# 		background-color: rgba(255, 255, 255, 0.2);
-		# 	}
-		# """)
 
 		# Apply initial theme
 		self.apply_theme()
@@ -423,7 +406,6 @@ class MusicPlayer(QMainWindow):
 			self.save_library()  # Save after adding
 
 	def load_library(self):
-		"""Load library from JSON on startup"""
 		if not self.library_file.exists():
 			print("No saved library found")
 			return
@@ -441,7 +423,6 @@ class MusicPlayer(QMainWindow):
 			print(f"Error loading library: {e}")
 
 	def save_library(self):
-		"""Save library to JSON file"""
 		data = {
 			'library': self.library,
 			'watched_folders': self.watched_folders
@@ -492,13 +473,11 @@ class MusicPlayer(QMainWindow):
 						continue
 
 	def populate_genre_tree(self):
-		"""Populate the genre column"""
 		self.genre_tree.clear()
 		for genre in sorted(self.library.keys()):
 			QTreeWidgetItem(self.genre_tree, [genre])
 
 	def on_genre_selected(self, item):
-		"""When genre is selected, show artists"""
 		genre = item.text(0)
 		self.artist_tree.clear()
 		self.album_tree.clear()
@@ -511,7 +490,6 @@ class MusicPlayer(QMainWindow):
 		#self.save_settings()
 
 	def on_artist_selected(self, item):
-		"""When artist is selected, show albums"""
 		genre_item = self.genre_tree.currentItem()
 		if not genre_item:
 			return
@@ -529,7 +507,6 @@ class MusicPlayer(QMainWindow):
 		#self.save_settings()
 
 	def on_album_selected(self, item):
-		"""When album is selected, show songs"""
 		from mutagen import File
 
 		genre_item = self.genre_tree.currentItem()
@@ -616,7 +593,6 @@ class MusicPlayer(QMainWindow):
 				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, song_path)
 
 	def on_song_double_clicked(self, item):
-		"""Play song when double-clicked"""
 		row = item.row()
 		song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
 
@@ -630,7 +606,6 @@ class MusicPlayer(QMainWindow):
 		self.play_song(song_path)
 
 	def play_song(self, file_path):
-			"""Play the specified audio file"""
 			from mutagen import File
 
 			icon_color = 'white' if self.dark_mode else 'black'
@@ -653,12 +628,10 @@ class MusicPlayer(QMainWindow):
 				self.now_playing_text.setText(Path(file_path).stem)
 
 	def play_pause(self):
-		"""Toggle play/pause"""
 		icon_color = 'white' if self.dark_mode else 'black'
 
 		# Check if there's a song loaded
 		if self.player.source().isEmpty():
-			# No song loaded, do nothing
 			return
 
 		if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -671,7 +644,6 @@ class MusicPlayer(QMainWindow):
 			self.play_btn.setToolTip("Pause")
 
 	def stop(self):
-		"""Stop playback"""
 		icon_color = 'white' if self.dark_mode else 'black'
 
 		self.player.stop()
@@ -680,7 +652,6 @@ class MusicPlayer(QMainWindow):
 		self.now_playing_text.setText("---")
 
 	def next_track(self):
-		"""Play next track in current playlist"""
 		if not self.current_playlist:
 			return
 
@@ -698,7 +669,6 @@ class MusicPlayer(QMainWindow):
 		self.highlight_current_song()
 
 	def previous_track(self):
-		"""Play previous track in current playlist"""
 		if not self.current_playlist:
 			return
 
@@ -712,7 +682,6 @@ class MusicPlayer(QMainWindow):
 		self.highlight_current_song()
 
 	def highlight_current_song(self):
-		"""Highlight the currently playing song in the table"""
 		if not self.current_playlist:
 			return
 
@@ -724,8 +693,6 @@ class MusicPlayer(QMainWindow):
 				break
 
 	def save_settings(self):
-		"""Save UI settings like column widths"""
-
 		# Get currently selected items
 		genre_item = self.genre_tree.currentItem()
 		artist_item = self.artist_tree.currentItem()
@@ -768,7 +735,6 @@ class MusicPlayer(QMainWindow):
 			print(f"Error saving settings: {e}")
 
 	def load_settings(self):
-		"""Load UI settings"""
 		if not self.settings_file.exists():
 			# Set default column widths
 			self.song_table.setColumnWidth(0, 80)   # Track #
@@ -783,8 +749,6 @@ class MusicPlayer(QMainWindow):
 		try:
 			with open(self.settings_file, 'r') as f:
 				settings = json.load(f)
-
-			#print(f"DEBUG - Loaded settings: {settings}")  # ADD THIS
 
 			# Restore column widths
 			widths = settings.get('column_widths', [80, 300, 200, 200, 80, 80, 150])
@@ -885,8 +849,6 @@ class MusicPlayer(QMainWindow):
 			selected_album = settings.get('selected_album')
 			selected_song = settings.get('selected_song')
 
-			# print(f"DEBUG - About to restore: genre={selected_genre}, artist={selected_artist}, album={selected_album}")  # ADD THIS
-
 			if selected_genre:
 				self.restore_selection(selected_genre, selected_artist, selected_album, selected_song)
 
@@ -894,7 +856,6 @@ class MusicPlayer(QMainWindow):
 			print(f"Error loading settings: {e}")
 
 	def rescan_library(self):
-		"""Rescan all watched folders for changes"""
 		if not self.watched_folders:
 			print("No folders to rescan")
 			return
@@ -914,12 +875,10 @@ class MusicPlayer(QMainWindow):
 		print("Rescan complete")
 
 	def handle_player_error(self, error):
-		"""Handle playback errors"""
 		if error != QMediaPlayer.Error.NoError:
 			print(f"Playback error: {self.player.errorString()}")
 
 	def update_progress(self, position):
-		"""Update progress bar as song plays"""
 		if not self.progress_slider_pressed:
 			duration = self.player.duration()
 			if duration > 0:
@@ -931,13 +890,11 @@ class MusicPlayer(QMainWindow):
 			self.progress_label.setText(f"{minutes}:{seconds:02d}")
 
 	def update_duration(self, duration):
-		"""Update duration label when song loads"""
 		minutes = int(duration / 60000)
 		seconds = int((duration % 60000) / 1000)
 		self.duration_label.setText(f"{minutes}:{seconds:02d}")
 
 	def change_volume(self, value):
-		"""Change playback volume"""
 		icon_color = 'white' if self.dark_mode else 'black'
 
 		self.audio_output.setVolume(value / 100.0)
@@ -955,7 +912,6 @@ class MusicPlayer(QMainWindow):
 		self.save_settings()
 
 	def on_media_status_changed(self, status):
-		"""Handle when a song ends"""
 		from PyQt6.QtMultimedia import QMediaPlayer
 
 		if status == QMediaPlayer.MediaStatus.EndOfMedia:
@@ -971,7 +927,6 @@ class MusicPlayer(QMainWindow):
 				self.stop()
 
 	def on_genre_double_clicked(self, item):
-		"""Play all songs in genre"""
 		import random
 		genre = item.text(0)
 		self.current_playlist = []
@@ -994,7 +949,6 @@ class MusicPlayer(QMainWindow):
 			self.play_song(self.current_playlist[0])
 
 	def on_artist_double_clicked(self, item):
-		"""Play all songs by artist"""
 		import random
 
 		genre_item = self.genre_tree.currentItem()
@@ -1024,7 +978,6 @@ class MusicPlayer(QMainWindow):
 			self.play_song(self.current_playlist[0])
 
 	def on_album_double_clicked(self, item):
-		"""Play all songs in album"""
 		import random
 
 		genre_item = self.genre_tree.currentItem()
@@ -1053,7 +1006,6 @@ class MusicPlayer(QMainWindow):
 			self.play_song(self.current_playlist[0])
 
 	def populate_song_table_from_playlist(self):
-			"""Populate the song table with songs from current playlist"""
 			from mutagen import File
 
 			self.song_table.setRowCount(0)
@@ -1118,10 +1070,7 @@ class MusicPlayer(QMainWindow):
 				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, song_path)
 
 	def restore_selection(self, genre, artist, album, song=None):
-		"""Restore previously selected genre/artist/album/song"""
 		from PyQt6.QtCore import QTimer
-
-		# print(f"DEBUG - Scheduling restore: Genre={genre}, Artist={artist}, Album={album}, Song={song}")
 
 		# Store song for later restoration
 		self._restore_song_path = song
@@ -1130,14 +1079,10 @@ class MusicPlayer(QMainWindow):
 		QTimer.singleShot(100, lambda: self._do_restore(genre, artist, album))
 
 	def _do_restore(self, genre, artist, album):
-		"""Actually perform the restoration"""
-		# print(f"DEBUG - Executing restore: Genre={genre}, Artist={artist}, Album={album}")
-
 		# Find and select genre
 		for i in range(self.genre_tree.topLevelItemCount()):
 			item = self.genre_tree.topLevelItem(i)
 			if item.text(0) == genre:
-				# print(f"DEBUG - Found genre: {genre}")
 				self.genre_tree.setCurrentItem(item)
 				self.on_genre_selected(item)
 
@@ -1148,12 +1093,9 @@ class MusicPlayer(QMainWindow):
 				break
 
 	def _restore_artist(self, genre, artist, album):
-		"""Restore artist selection"""
-		# print(f"DEBUG - Restoring artist: {artist}")
 		for j in range(self.artist_tree.topLevelItemCount()):
 			artist_item = self.artist_tree.topLevelItem(j)
 			if artist_item.text(0) == artist:
-				# print(f"DEBUG - Found artist: {artist}")
 				self.artist_tree.setCurrentItem(artist_item)
 				self.on_artist_selected(artist_item)
 
@@ -1164,15 +1106,11 @@ class MusicPlayer(QMainWindow):
 				break
 
 	def _restore_album(self, genre, artist, album):
-		"""Restore album selection"""
-		# print(f"DEBUG - Restoring album: {album}")
 		for k in range(self.album_tree.topLevelItemCount()):
 			album_item = self.album_tree.topLevelItem(k)
 			if album_item.text(0) == album:
-				# print(f"DEBUG - Found album: {album}")
 				self.album_tree.setCurrentItem(album_item)
 				self.on_album_selected(album_item)
-				# print(f"DEBUG - Album restored successfully")
 
 				# Restore selected song if present
 				if hasattr(self, '_restore_song_path') and self._restore_song_path:
@@ -1181,17 +1119,13 @@ class MusicPlayer(QMainWindow):
 				break
 
 	def _restore_song(self, song_path):
-		"""Restore song selection"""
-		# print(f"DEBUG - Restoring song: {song_path}")
 		for row in range(self.song_table.rowCount()):
 			current_song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
 			if current_song_path == song_path:
-				# print(f"DEBUG - Found song at row {row}")
 				self.song_table.selectRow(row)
 				break
 
 	def closeEvent(self, event):
-		"""Save settings when app closes"""
 		self.save_settings()
 
 		# Save playback position if feature is enabled
@@ -1211,13 +1145,6 @@ class MusicPlayer(QMainWindow):
 		event.accept()
 
 	def load_icon(self, filename, color=None, use_style_path=True):
-		"""Load an SVG icon and optionally recolor it"""
-
-		# Use icons directory relative to script location (portable)
-		# icon_path = self.app_dir / 'icons' / filename
-		# if not icon_path.exists():
-		# 	print(f"Icon not found: {icon_path}")
-		# 	return QIcon()
 		# Determine the icon path based on whether it should use style-specific folder
 		if use_style_path:
 			style_folder = 'rounded' if self.rounded_buttons else 'straight'
@@ -1250,7 +1177,6 @@ class MusicPlayer(QMainWindow):
 			return QIcon(str(icon_path))
 
 	def toggle_theme(self):
-		"""Switch between dark and light mode"""
 		self.dark_mode = not self.dark_mode
 		icon_color = 'white' if self.dark_mode else 'black'
 
@@ -1300,7 +1226,6 @@ class MusicPlayer(QMainWindow):
 		self.apply_theme()
 
 	def toggle_button_style(self):
-		"""Toggle between straight and rounded button icons"""
 		self.rounded_buttons = not self.rounded_buttons
 		icon_color = 'white' if self.dark_mode else 'black'
 
@@ -1331,7 +1256,6 @@ class MusicPlayer(QMainWindow):
 		self.save_settings()
 
 	def apply_theme(self):
-		"""Apply dark or light theme colors to the application"""
 		if self.dark_mode:
 			# Dark mode colors
 			bg_color = "#1e1e1e"
@@ -1416,7 +1340,6 @@ class MusicPlayer(QMainWindow):
 		""")
 
 	def toggle_mute(self):
-		"""Toggle mute on/off"""
 		icon_color = 'white' if self.dark_mode else 'black'
 
 		if self.is_muted:
@@ -1434,7 +1357,6 @@ class MusicPlayer(QMainWindow):
 			self.mute_btn.setToolTip("Unmute")
 
 	def cycle_repeat_mode(self):
-		"""Cycle through repeat modes: off -> song -> album -> off"""
 		icon_color = 'white' if self.dark_mode else 'black'
 
 		self.repeat_mode = (self.repeat_mode + 1) % 3
@@ -1461,14 +1383,12 @@ class MusicPlayer(QMainWindow):
 		self.save_settings()
 
 	def on_progress_slider_moved(self, position):
-		"""Seek when user clicks or drags on the progress bar"""
 		duration = self.player.duration()
 		if duration > 0:
 			new_position = int((position / 1000) * duration)
 			self.player.setPosition(new_position)
 
 	def on_progress_slider_pressed(self):
-		"""User started interacting with the slider"""
 		self.progress_slider_pressed = True
 		# Seek immediately when clicking anywhere on the bar
 		duration = self.player.duration()
@@ -1477,11 +1397,9 @@ class MusicPlayer(QMainWindow):
 			self.player.setPosition(position)
 
 	def on_progress_slider_released(self):
-		"""User released the slider"""
 		self.progress_slider_pressed = False
 
 	def toggle_shuffle(self):
-		"""Toggle shuffle on/off"""
 		import random
 		icon_color = 'white' if self.dark_mode else 'black'
 
@@ -1512,11 +1430,9 @@ class MusicPlayer(QMainWindow):
 		self.save_settings()
 
 	def sort_playlist(self, playlist):
-		"""Sort playlist by track number, then by title"""
 		from mutagen import File
 
 		def get_sort_key(song_path):
-			"""Get sorting key for a song (track_number, title)"""
 			try:
 				audio = File(song_path, easy=True)
 				if audio:
@@ -1545,7 +1461,6 @@ class MusicPlayer(QMainWindow):
 		return sorted(playlist, key=get_sort_key)
 
 	def changeEvent(self, event):
-		"""Handle window state changes"""
 		if event.type() == event.Type.WindowStateChange:
 			# Check if we just un-maximized
 			if not self.isMaximized() and event.oldState() == Qt.WindowState.WindowMaximized:
@@ -1555,7 +1470,6 @@ class MusicPlayer(QMainWindow):
 		super().changeEvent(event)
 
 	def toggle_remember_position(self):
-			"""Toggle the remember position feature on/off"""
 			self.remember_position = not self.remember_position
 			icon_color = 'white' if self.dark_mode else 'black'
 
@@ -1572,9 +1486,8 @@ class MusicPlayer(QMainWindow):
 			self.save_settings()
 
 	def restore_playback_position(self):
-		"""Restore playback position if feature is enabled"""
-		print(f"DEBUG - Remember position enabled: {self.remember_position}")
-		print(f"DEBUG - Position file exists: {self.playback_position_file.exists()}")
+		#print(f"DEBUG - Remember position enabled: {self.remember_position}")
+		#print(f"DEBUG - Position file exists: {self.playback_position_file.exists()}")
 
 		if not self.remember_position or not self.playback_position_file.exists():
 			return
