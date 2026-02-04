@@ -32,9 +32,7 @@ Close the terminal and run **launch-linux.sh**
 ### Windows
 ```
 python -m venv venv
-cd venv\Scripts
-activate
-cd ../..
+call venv\Scripts\activate
 pip install -r requirements.txt
 ```
 Close the terminal and run **launch-windows.bat**
