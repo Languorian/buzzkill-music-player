@@ -182,6 +182,15 @@ class ScalableLabel(QLabel):
 			super().setPixmap(scaled)
 		super().resizeEvent(event)
 
+class NumericTableWidgetItem(QTableWidgetItem):
+	def __lt__(self, other):
+		if isinstance(other, QTableWidgetItem):
+			data = self.data(Qt.ItemDataRole.UserRole)
+			other_data = other.data(Qt.ItemDataRole.UserRole)
+			if data is not None and other_data is not None:
+				return data < other_data
+		return super().__lt__(other)
+
 class MusicPlayer(QMainWindow):
 	def __init__(self):
 		super().__init__()
@@ -580,6 +589,7 @@ class MusicPlayer(QMainWindow):
 		self.song_table.setColumnCount(7)
 		self.song_table.setHorizontalHeaderLabels(["Track #", "Title", "Artist", "Album", "Year", "Time", "Genre"])
 		self.song_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+		self.song_table.setSortingEnabled(True)
 		self.song_table.verticalHeader().setVisible(False)  # Remove row numbers
 		self.song_table.itemDoubleClicked.connect(self.on_song_double_clicked)
 		self.song_table.horizontalHeader().sectionResized.connect(self.save_settings)
@@ -726,6 +736,7 @@ class MusicPlayer(QMainWindow):
 		album = item.text(0)
 
 		self.song_table.setRowCount(0)
+		self.song_table.setSortingEnabled(False)
 
 		if album in self.library[genre][artist]:
 			self.current_songs = self.library[genre][artist][album]
@@ -742,19 +753,33 @@ class MusicPlayer(QMainWindow):
 
 					if audio:
 						# Track number
-						track_num = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
+						track_num_raw = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
 						# Handle "1/12" format, just take first number
-						if '/' in str(track_num):
-							track_num = track_num.split('/')[0]
+						if '/' in str(track_num_raw):
+							track_num_display = track_num_raw.split('/')[0]
+						else:
+							track_num_display = track_num_raw
+						
+						try:
+							track_num_sort = int(track_num_display)
+						except:
+							track_num_sort = 999
 
 						# Title
 						title = audio.get('title', [Path(song_path).stem])[0] if audio.get('title') else Path(song_path).stem
 
 						# Year
-						year = audio.get('date', [''])[0] if audio.get('date') else ''
+						year_raw = audio.get('date', [''])[0] if audio.get('date') else ''
 						# Handle full dates like "2015-01-01", just take year
-						if '-' in str(year):
-							year = year.split('-')[0]
+						if '-' in str(year_raw):
+							year_display = year_raw.split('-')[0]
+						else:
+							year_display = year_raw
+						
+						try:
+							year_sort = int(year_display)
+						except:
+							year_sort = 0
 
 						# Duration
 						duration = audio.info.length if hasattr(audio, 'info') else 0
@@ -779,30 +804,51 @@ class MusicPlayer(QMainWindow):
 
 
 					else:
-						track_num = ''
+						track_num_display = ''
+						track_num_sort = 999
 						title = Path(song_path).stem
-						year = ''
+						year_display = ''
+						year_sort = 0
 						time_str = ''
+						duration = 0
+						artist_name = ''
+						album_name = ''
+						genre_name = ''
 				except:
-					track_num = ''
+					track_num_display = ''
+					track_num_sort = 999
 					title = Path(song_path).stem
 					artist_name = ''
 					album_name = ''
-					year = ''
+					year_display = ''
+					year_sort = 0
 					time_str = ''
+					duration = 0
 					genre_name = ''
 
 				# Populate columns
-				self.song_table.setItem(i, 0, QTableWidgetItem(str(track_num)))
+				track_item = NumericTableWidgetItem(str(track_num_display))
+				track_item.setData(Qt.ItemDataRole.UserRole, track_num_sort)
+				self.song_table.setItem(i, 0, track_item)
+				
 				self.song_table.setItem(i, 1, QTableWidgetItem(title))
 				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
 				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
-				self.song_table.setItem(i, 4, QTableWidgetItem(str(year)))
-				self.song_table.setItem(i, 5, QTableWidgetItem(time_str))
+				
+				year_item = NumericTableWidgetItem(str(year_display))
+				year_item.setData(Qt.ItemDataRole.UserRole, year_sort)
+				self.song_table.setItem(i, 4, year_item)
+				
+				time_item = NumericTableWidgetItem(time_str)
+				time_item.setData(Qt.ItemDataRole.UserRole, duration)
+				self.song_table.setItem(i, 5, time_item)
+				
 				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
 
 				# Store the file path invisibly for playback
-				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, song_path)
+				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole + 1, song_path)
+
+		self.song_table.setSortingEnabled(True)
 
 	def on_song_double_clicked(self, item):
 		row = item.row()
@@ -1289,6 +1335,7 @@ class MusicPlayer(QMainWindow):
 			from mutagen import File
 
 			self.song_table.setRowCount(0)
+			self.song_table.setSortingEnabled(False)
 
 			for i, song_path in enumerate(self.current_playlist):
 				self.song_table.insertRow(i)
@@ -1299,17 +1346,31 @@ class MusicPlayer(QMainWindow):
 
 					if audio:
 						# Track number
-						track_num = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
-						if '/' in str(track_num):
-							track_num = track_num.split('/')[0]
+						track_num_raw = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
+						if '/' in str(track_num_raw):
+							track_num_display = track_num_raw.split('/')[0]
+						else:
+							track_num_display = track_num_raw
+						
+						try:
+							track_num_sort = int(track_num_display)
+						except:
+							track_num_sort = 999
 
 						# Title
 						title = audio.get('title', [Path(song_path).stem])[0] if audio.get('title') else Path(song_path).stem
 
 						# Year
-						year = audio.get('date', [''])[0] if audio.get('date') else ''
-						if '-' in str(year):
-							year = year.split('-')[0]
+						year_raw = audio.get('date', [''])[0] if audio.get('date') else ''
+						if '-' in str(year_raw):
+							year_display = year_raw.split('-')[0]
+						else:
+							year_display = year_raw
+						
+						try:
+							year_sort = int(year_display)
+						except:
+							year_sort = 0
 
 						# Duration
 						duration = audio.info.length if hasattr(audio, 'info') else 0
@@ -1333,27 +1394,51 @@ class MusicPlayer(QMainWindow):
 						genre_name = audio.get('genre', [''])[0] if audio.get('genre') else ''
 
 					else:
-						track_num = ''
+						track_num_display = ''
+						track_num_sort = 999
 						title = Path(song_path).stem
-						year = ''
+						year_display = ''
+						year_sort = 0
 						time_str = ''
+						duration = 0
+						artist_name = ''
+						album_name = ''
+						genre_name = ''
 				except:
-					track_num = ''
+					track_num_display = ''
+					track_num_sort = 999
 					title = Path(song_path).stem
-					year = ''
+					year_display = ''
+					year_sort = 0
 					time_str = ''
+					duration = 0
+					artist_name = ''
+					album_name = ''
+					genre_name = ''
 
 				# Populate columns
-				self.song_table.setItem(i, 0, QTableWidgetItem(str(track_num)))
+				track_item = NumericTableWidgetItem(str(track_num_display))
+				track_item.setData(Qt.ItemDataRole.UserRole, track_num_sort)
+				self.song_table.setItem(i, 0, track_item)
+				
 				self.song_table.setItem(i, 1, QTableWidgetItem(title))
 				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
 				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
-				self.song_table.setItem(i, 4, QTableWidgetItem(str(year)))
-				self.song_table.setItem(i, 5, QTableWidgetItem(time_str))
+				
+				year_item = NumericTableWidgetItem(str(year_display))
+				year_item.setData(Qt.ItemDataRole.UserRole, year_sort)
+				self.song_table.setItem(i, 4, year_item)
+				
+				time_item = NumericTableWidgetItem(time_str)
+				time_item.setData(Qt.ItemDataRole.UserRole, duration)
+				self.song_table.setItem(i, 5, time_item)
+				
 				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
 
 				# Store the file path invisibly for playback
-				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, song_path)
+				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole + 1, song_path)
+
+			self.song_table.setSortingEnabled(True)
 
 	def restore_selection(self, genre, artist, album, song=None):
 		from PyQt6.QtCore import QTimer
