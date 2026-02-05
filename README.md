@@ -38,10 +38,7 @@ pip install -r requirements.txt
 Close the terminal and run **launch-windows.bat**
 
 ## Instructions
-- On first launch, click the folder icon in the top-left to choose your music library folder (example: C:\Users\CoolGuy\Music). The app may freeze for a few seconds as it scans your files. When finished, the library will populate with your music.
-*Note: The app only supports one folder at this time.*
-
-- The app does not actively monitor your library. If you make any changes (add files, delete files, etc.), you will have to manually rescan your library by clicking the Rescan button (top-left).
+- On first launch, click the folder icon in the top-left to choose your music library folder (example: C:\Users\CoolGuy\Music). *Note: The app only supports one folder at this time.*
 
 - The Bookmark button tells the app to remember the playback position of your music. When enabled, you can close the app and maintain playback position the next time you launch the app.
 

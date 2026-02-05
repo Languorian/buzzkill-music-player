@@ -9,9 +9,10 @@ os.environ['QT_LOGGING_RULES'] = 'qt.multimedia*=false'
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QHBoxLayout, QPushButton, QTreeWidget, QTreeWidgetItem,
 							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
-							 QLabel, QSplitter, QGridLayout)
+							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
+							 QStatusBar)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
-from PyQt6.QtCore import Qt, QUrl, QSize
+from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 class ClickableSlider(QSlider):
@@ -21,6 +22,136 @@ class ClickableSlider(QSlider):
 			self.setValue(int(value))
 			self.sliderPressed.emit()
 		super().mousePressEvent(event)
+
+class LibraryScanner(QThread):
+	finished = pyqtSignal(dict)
+
+	def __init__(self, watched_folders):
+		super().__init__()
+		self.watched_folders = watched_folders
+
+	def run(self):
+		from mutagen import File
+		new_library = {}
+		audio_extensions = {'.mp3', '.flac', '.ogg', '.wav', '.m4a', '.wma'}
+
+		for folder_path in self.watched_folders:
+			if not os.path.exists(folder_path):
+				continue
+				
+			for root, dirs, files in os.walk(folder_path):
+				for file in files:
+					if Path(file).suffix.lower() in audio_extensions:
+						full_path = os.path.join(root, file)
+
+						try:
+							# Read metadata
+							audio = File(full_path, easy=True)
+
+							if audio is None:
+								continue
+
+							# Extract metadata with fallbacks
+							genre = audio.get('genre', ['Unknown Genre'])[0] if audio.get('genre') else 'Unknown Genre'
+							artist = audio.get('artist', ['Unknown Artist'])[0] if audio.get('artist') else 'Unknown Artist'
+							album = audio.get('album', ['Unknown Album'])[0] if audio.get('album') else 'Unknown Album'
+
+							# Build library structure
+							if genre not in new_library:
+								new_library[genre] = {}
+							if artist not in new_library[genre]:
+								new_library[genre][artist] = {}
+							if album not in new_library[genre][artist]:
+								new_library[genre][artist][album] = []
+
+							new_library[genre][artist][album].append(full_path)
+
+						except:
+							continue
+		
+		self.finished.emit(new_library)
+
+class ColorPickerDialog(QDialog):
+	def __init__(self, parent=None, initial_color="#1976d2"):
+		super().__init__(parent)
+		self.setWindowTitle("Select Accent Color")
+		self.setFixedWidth(300)
+		
+		layout = QVBoxLayout(self)
+		
+		# Current color preview
+		self.color = QColor(initial_color)
+		self.preview = QWidget()
+		self.preview.setFixedHeight(80)
+		self.update_preview()
+		layout.addWidget(self.preview)
+		
+		# RGB Sliders
+		self.r_slider = self.create_slider("R", self.color.red(), layout)
+		self.g_slider = self.create_slider("G", self.color.green(), layout)
+		self.b_slider = self.create_slider("B", self.color.blue(), layout)
+		
+		# HEX Input
+		hex_layout = QHBoxLayout()
+		hex_layout.addWidget(QLabel("HEX:"))
+		self.hex_input = QLineEdit(self.color.name().upper())
+		self.hex_input.textChanged.connect(self.on_hex_changed)
+		hex_layout.addWidget(self.hex_input)
+		layout.addLayout(hex_layout)
+		
+		# Buttons
+		btn_layout = QHBoxLayout()
+		ok_btn = QPushButton("OK")
+		ok_btn.clicked.connect(self.accept)
+		cancel_btn = QPushButton("Cancel")
+		cancel_btn.clicked.connect(self.reject)
+		btn_layout.addWidget(ok_btn)
+		btn_layout.addWidget(cancel_btn)
+		layout.addLayout(btn_layout)
+
+	def create_slider(self, label, value, parent_layout):
+		layout = QHBoxLayout()
+		layout.addWidget(QLabel(label))
+		slider = QSlider(Qt.Orientation.Horizontal)
+		slider.setRange(0, 255)
+		slider.setValue(value)
+		slider.valueChanged.connect(self.on_slider_changed)
+		layout.addWidget(slider)
+		
+		val_label = QLabel(str(value))
+		val_label.setFixedWidth(30)
+		layout.addWidget(val_label)
+		slider.valueChanged.connect(lambda v: val_label.setText(str(v)))
+		
+		parent_layout.addLayout(layout)
+		return slider
+
+	def update_preview(self):
+		self.preview.setStyleSheet(f"background-color: {self.color.name()}; border: 1px solid #3d3d3d; border-radius: 4px;")
+
+	def on_slider_changed(self):
+		self.color = QColor(self.r_slider.value(), self.g_slider.value(), self.b_slider.value())
+		self.hex_input.blockSignals(True)
+		self.hex_input.setText(self.color.name().upper())
+		self.hex_input.blockSignals(False)
+		self.update_preview()
+
+	def on_hex_changed(self, text):
+		if QColor.isValidColorName(text):
+			self.color = QColor(text)
+			self.r_slider.blockSignals(True)
+			self.g_slider.blockSignals(True)
+			self.b_slider.blockSignals(True)
+			self.r_slider.setValue(self.color.red())
+			self.g_slider.setValue(self.color.green())
+			self.b_slider.setValue(self.color.blue())
+			self.r_slider.blockSignals(False)
+			self.g_slider.blockSignals(False)
+			self.b_slider.blockSignals(False)
+			self.update_preview()
+
+	def get_color(self):
+		return self.color.name()
 
 class MusicPlayer(QMainWindow):
 	def __init__(self):
@@ -85,9 +216,15 @@ class MusicPlayer(QMainWindow):
 		self.unshuffled_playlist = []
 		self.remember_position = False
 		self.rounded_buttons = True
+		self.accent_color = "#1976d2"
 
 		self.init_ui()
 		self.load_library()
+		
+		# Background rescan on startup if we have folders saved
+		if self.watched_folders:
+			self.rescan_library()
+
 		self.load_settings()
 		self.restore_playback_position()
 
@@ -177,6 +314,15 @@ class MusicPlayer(QMainWindow):
 		self.darkmode_btn.setFlat(True)
 		self.darkmode_btn.clicked.connect(self.toggle_theme)
 		left_controls.addWidget(self.darkmode_btn)
+
+		# Accent Color button
+		self.accent_btn = QPushButton()
+		self.accent_btn.setIconSize(self.icon_size)
+		self.accent_btn.setToolTip("Change accent color")
+		self.accent_btn.setFlat(True)
+		self.update_accent_icon()
+		self.accent_btn.clicked.connect(self.choose_accent_color)
+		left_controls.addWidget(self.accent_btn)
 
 		# ===========================
 		# 2. CENTER SECTION
@@ -395,18 +541,22 @@ class MusicPlayer(QMainWindow):
 
 		layout.addWidget(self.splitter)
 
+		# Status Bar
+		self.setStatusBar(QStatusBar())
+		self.statusBar().showMessage("Ready")
+
 	def add_folder(self):
 		folder = QFileDialog.getExistingDirectory(self, "Select Music Folder")
 		if folder:
 			if folder not in self.watched_folders:
 				self.watched_folders.append(folder)
-
-			self.scan_folder(folder)
-			self.populate_genre_tree()
-			self.save_library()  # Save after adding
+			
+			# Trigger a background rescan which will also update the status bar
+			self.rescan_library()
 
 	def load_library(self):
 		if not self.library_file.exists():
+			self.statusBar().showMessage("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
 			print("No saved library found")
 			return
 
@@ -416,6 +566,11 @@ class MusicPlayer(QMainWindow):
 
 			self.library = data.get('library', {})
 			self.watched_folders = data.get('watched_folders', [])
+
+			if not self.watched_folders:
+				self.statusBar().showMessage("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
+			else:
+				self.statusBar().showMessage("Ready")
 
 			self.populate_genre_tree()
 			print(f"Library loaded: {len(self.watched_folders)} folders")
@@ -725,7 +880,8 @@ class MusicPlayer(QMainWindow):
 			'shuffle_enabled': self.shuffle_enabled,
 			'remember_position': self.remember_position,
 			'volume': self.volume_slider.value(),
-			'rounded_buttons': self.rounded_buttons
+			'rounded_buttons': self.rounded_buttons,
+			'accent_color': self.accent_color
 		}
 
 		try:
@@ -778,6 +934,10 @@ class MusicPlayer(QMainWindow):
 
 			# Restore button style
 			self.rounded_buttons = settings.get('rounded_buttons', True)
+
+			# Restore accent color
+			self.accent_color = settings.get('accent_color', "#1976d2")
+			self.update_accent_icon()
 
 			# Restore repeat mode
 			self.repeat_mode = settings.get('repeat_mode', 0)
@@ -860,19 +1020,53 @@ class MusicPlayer(QMainWindow):
 			print("No folders to rescan")
 			return
 
-		# Clear library and rescan from scratch
-		self.library = {}
+		# Update UI to show we are rescanning
+		self.rescan_btn.setEnabled(False)
+		self.add_folder_btn.setEnabled(False)
+		self.rescan_btn.setToolTip("Scanning library in background...")
+		self.statusBar().showMessage("Scanning library...")
 
-		for folder in self.watched_folders:
-			if os.path.exists(folder):
-				print(f"Rescanning {folder}...")
-				self.scan_folder(folder)
-			else:
-				print(f"Folder no longer exists: {folder}")
+		# Create and start the background scanner
+		self.scanner = LibraryScanner(self.watched_folders)
+		self.scanner.finished.connect(self.on_scan_finished)
+		self.scanner.start()
 
-		self.populate_genre_tree()
-		self.save_library()
-		print("Rescan complete")
+	def on_scan_finished(self, new_library):
+		# Re-enable buttons
+		self.rescan_btn.setEnabled(True)
+		self.add_folder_btn.setEnabled(True)
+		self.rescan_btn.setToolTip("Rescan library for new files")
+
+		# Update library and refresh UI
+		if new_library:
+			# Capture current selection to restore it after refresh
+			genre_item = self.genre_tree.currentItem()
+			artist_item = self.artist_tree.currentItem()
+			album_item = self.album_tree.currentItem()
+			
+			sel_genre = genre_item.text(0) if genre_item else None
+			sel_artist = artist_item.text(0) if artist_item else None
+			sel_album = album_item.text(0) if album_item else None
+			
+			# Capture currently selected song path
+			sel_song = None
+			curr_row = self.song_table.currentRow()
+			if curr_row >= 0:
+				sel_song = self.song_table.item(curr_row, 0).data(Qt.ItemDataRole.UserRole)
+
+			self.library = new_library
+			self.populate_genre_tree()
+			self.save_library()
+			
+			# Restore selection if it still exists in the new library
+			if sel_genre:
+				self.restore_selection(sel_genre, sel_artist, sel_album, sel_song)
+				
+			self.statusBar().showMessage("Library scan complete", 5000)
+			print("Background rescan complete")
+		else:
+			self.statusBar().showMessage("Library scan finished: No files found", 5000)
+			print("Background rescan finished with no files found")
 
 	def handle_player_error(self, error):
 		if error != QMediaPlayer.Error.NoError:
@@ -1176,6 +1370,25 @@ class MusicPlayer(QMainWindow):
 		else:
 			return QIcon(str(icon_path))
 
+	def update_accent_icon(self):
+		pixmap = QPixmap(self.icon_size)
+		pixmap.fill(Qt.GlobalColor.transparent)
+		painter = QPainter(pixmap)
+		painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+		painter.setBrush(QColor(self.accent_color))
+		painter.setPen(Qt.PenStyle.NoPen)
+		painter.drawEllipse(2, 2, self.icon_size.width()-4, self.icon_size.height()-4)
+		painter.end()
+		self.accent_btn.setIcon(QIcon(pixmap))
+
+	def choose_accent_color(self):
+		dialog = ColorPickerDialog(self, self.accent_color)
+		if dialog.exec():
+			self.accent_color = dialog.get_color()
+			self.update_accent_icon()
+			self.apply_theme()
+			self.save_settings()
+
 	def toggle_theme(self):
 		self.dark_mode = not self.dark_mode
 		icon_color = 'white' if self.dark_mode else 'black'
@@ -1271,6 +1484,15 @@ class MusicPlayer(QMainWindow):
 			secondary_text = "#4a4a4a"
 			border_color = "#c0c0c0"
 
+		# Accent variants
+		accent_base = QColor(self.accent_color)
+		if self.dark_mode:
+			selection_bg = accent_base.darker(150).name()
+			slider_subpage = accent_base.name()
+		else:
+			selection_bg = accent_base.name()
+			slider_subpage = accent_base.lighter(120).name()
+
 		# Apply stylesheet
 		self.setStyleSheet(f"""
 			QMainWindow {{
@@ -1299,7 +1521,7 @@ class MusicPlayer(QMainWindow):
 				border: 1px solid {border_color};
 			}}
 			QTreeWidget::item:selected {{
-				background-color: {'#0d47a1' if self.dark_mode else '#1976d2'};
+				background-color: {selection_bg};
 			}}
 			QTableWidget {{
 				background-color: {secondary_bg};
@@ -1308,7 +1530,7 @@ class MusicPlayer(QMainWindow):
 				gridline-color: {border_color};
 			}}
 			QTableWidget::item:selected {{
-				background-color: {'#0d47a1' if self.dark_mode else '#1976d2'};
+				background-color: {selection_bg};
 			}}
 			QHeaderView::section {{
 				background-color: {bg_color};
@@ -1331,7 +1553,7 @@ class MusicPlayer(QMainWindow):
 				border-radius: 6px;
 			}}
 			QSlider::sub-page:horizontal {{
-				background: {'#1976d2' if self.dark_mode else '#2196f3'};
+				background: {slider_subpage};
 				border-radius: 2px;
 			}}
 			QSplitter::handle {{
