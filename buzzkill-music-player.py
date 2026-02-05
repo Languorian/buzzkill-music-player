@@ -55,6 +55,21 @@ class LibraryScanner(QThread):
 							genre = audio.get('genre', ['Unknown Genre'])[0] if audio.get('genre') else 'Unknown Genre'
 							artist = audio.get('artist', ['Unknown Artist'])[0] if audio.get('artist') else 'Unknown Artist'
 							album = audio.get('album', ['Unknown Album'])[0] if audio.get('album') else 'Unknown Album'
+							title = audio.get('title', [Path(file).stem])[0] if audio.get('title') else Path(file).stem
+							track_num = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
+							year = audio.get('date', [''])[0] if audio.get('date') else ''
+							duration = audio.info.length if hasattr(audio, 'info') else 0
+
+							song_data = {
+								'path': full_path,
+								'title': title,
+								'artist': artist,
+								'album': album,
+								'genre': genre,
+								'tracknumber': track_num,
+								'year': year,
+								'duration': duration
+							}
 
 							# Build library structure
 							if genre not in new_library:
@@ -64,7 +79,7 @@ class LibraryScanner(QThread):
 							if album not in new_library[genre][artist]:
 								new_library[genre][artist][album] = []
 
-							new_library[genre][artist][album].append(full_path)
+							new_library[genre][artist][album].append(song_data)
 
 						except:
 							continue
@@ -668,6 +683,21 @@ class MusicPlayer(QMainWindow):
 						genre = audio.get('genre', ['Unknown Genre'])[0] if audio.get('genre') else 'Unknown Genre'
 						artist = audio.get('artist', ['Unknown Artist'])[0] if audio.get('artist') else 'Unknown Artist'
 						album = audio.get('album', ['Unknown Album'])[0] if audio.get('album') else 'Unknown Album'
+						title = audio.get('title', [Path(file).stem])[0] if audio.get('title') else Path(file).stem
+						track_num = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
+						year = audio.get('date', [''])[0] if audio.get('date') else ''
+						duration = audio.info.length if hasattr(audio, 'info') else 0
+
+						song_data = {
+							'path': full_path,
+							'title': title,
+							'artist': artist,
+							'album': album,
+							'genre': genre,
+							'tracknumber': track_num,
+							'year': year,
+							'duration': duration
+						}
 
 						# Build library structure
 						if genre not in self.library:
@@ -677,7 +707,18 @@ class MusicPlayer(QMainWindow):
 						if album not in self.library[genre][artist]:
 							self.library[genre][artist][album] = []
 
-						self.library[genre][artist][album].append(full_path)
+						# Check if song already exists in this album
+						exists = False
+						for s in self.library[genre][artist][album]:
+							if isinstance(s, dict) and s['path'] == full_path:
+								exists = True
+								break
+							elif s == full_path: # Handle old format
+								exists = True
+								break
+						
+						if not exists:
+							self.library[genre][artist][album].append(song_data)
 
 					except Exception as e:
 						print(f"Error reading {full_path}: {e}")
@@ -837,110 +878,8 @@ class MusicPlayer(QMainWindow):
 						all_songs.extend(self.library[genre][artist][album])
 
 		if all_songs:
-			self.current_songs = all_songs
 			self.current_playlist = self.sort_playlist(all_songs)
-
-			for i, song_path in enumerate(self.current_playlist):
-				self.song_table.insertRow(i)
-
-				# Read metadata for track info
-				try:
-					audio = File(song_path, easy=True)
-
-					if audio:
-						# Track number
-						track_num_raw = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
-						if '/' in str(track_num_raw):
-							track_num_display = track_num_raw.split('/')[0]
-						else:
-							track_num_display = track_num_raw
-
-						try:
-							track_num_sort = int(track_num_display)
-						except:
-							track_num_sort = 999
-
-						# Title
-						title = audio.get('title', [Path(song_path).stem])[0] if audio.get('title') else Path(song_path).stem
-
-						# Year
-						year_raw = audio.get('date', [''])[0] if audio.get('date') else ''
-						if '-' in str(year_raw):
-							year_display = year_raw.split('-')[0]
-						else:
-							year_display = year_raw
-
-						try:
-							year_sort = int(year_display)
-						except:
-							year_sort = 0
-
-						# Duration
-						duration = audio.info.length if hasattr(audio, 'info') else 0
-						if duration >= 3600:
-							hours = int(duration // 3600)
-							minutes = int((duration % 3600) // 60)
-							seconds = int(duration % 60)
-							time_str = f"{hours}:{minutes:02d}:{seconds:02d}"
-						else:
-							minutes = int(duration // 60)
-							seconds = int(duration % 60)
-							time_str = f"{minutes}:{seconds:02d}"
-
-						# Artist
-						artist_name = audio.get('artist', [''])[0] if audio.get('artist') else ''
-
-						# Album
-						album_name = audio.get('album', [''])[0] if audio.get('album') else ''
-
-						# Genre
-						genre_name = audio.get('genre', [''])[0] if audio.get('genre') else ''
-
-
-					else:
-						track_num_display = ''
-						track_num_sort = 999
-						title = Path(song_path).stem
-						year_display = ''
-						year_sort = 0
-						time_str = ''
-						duration = 0
-						artist_name = ''
-						album_name = ''
-						genre_name = ''
-				except:
-					track_num_display = ''
-					track_num_sort = 999
-					title = Path(song_path).stem
-					artist_name = ''
-					album_name = ''
-					year_display = ''
-					year_sort = 0
-					time_str = ''
-					duration = 0
-					genre_name = ''
-
-				# Populate columns
-				track_item = NumericTableWidgetItem(str(track_num_display))
-				track_item.setData(Qt.ItemDataRole.UserRole, track_num_sort)
-				self.song_table.setItem(i, 0, track_item)
-
-				self.song_table.setItem(i, 1, QTableWidgetItem(title))
-				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
-				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
-
-				year_item = NumericTableWidgetItem(str(year_display))
-				year_item.setData(Qt.ItemDataRole.UserRole, year_sort)
-				self.song_table.setItem(i, 4, year_item)
-
-				time_item = NumericTableWidgetItem(time_str)
-				time_item.setData(Qt.ItemDataRole.UserRole, duration)
-				self.song_table.setItem(i, 5, time_item)
-
-				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
-
-				# Store the file path invisibly for playback
-				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole + 1, song_path)
+			self.populate_song_table_from_playlist()
 
 		self.song_table.setSortingEnabled(True)
 
@@ -951,15 +890,14 @@ class MusicPlayer(QMainWindow):
 		# Build playlist from current song table
 		self.current_playlist = []
 		for i in range(self.song_table.rowCount()):
+			# We need to store the path in UserRole+1 consistently
 			path = self.song_table.item(i, 0).data(Qt.ItemDataRole.UserRole + 1)
-			self.current_playlist.append(path)
+			self.current_playlist.append({'path': path}) # Keep it consistent with expected dict format
 
 		self.current_track_index = row
 		self.play_song(song_path)
 
 	def play_song(self, file_path):
-			from mutagen import File
-
 			icon_color = 'white' if self.dark_mode else 'black'
 
 			self.player.setSource(QUrl.fromLocalFile(file_path))
@@ -968,16 +906,28 @@ class MusicPlayer(QMainWindow):
 			self.play_btn.setToolTip("Pause")
 
 			# Update now playing display
-			try:
-				audio = File(file_path, easy=True)
-				if audio:
-					artist = audio.get('artist', ['Unknown Artist'])[0] if audio.get('artist') else 'Unknown Artist'
-					title = audio.get('title', [Path(file_path).stem])[0] if audio.get('title') else Path(file_path).stem
+			# Try to find metadata in current_playlist first (much faster than disk)
+			found_metadata = False
+			for song in self.current_playlist:
+				if isinstance(song, dict) and song.get('path') == file_path:
+					artist = song.get('artist', 'Unknown Artist')
+					title = song.get('title', Path(file_path).stem)
 					self.now_playing_text.setText(f"{artist} - {title}")
-				else:
+					found_metadata = True
+					break
+			
+			if not found_metadata:
+				from mutagen import File
+				try:
+					audio = File(file_path, easy=True)
+					if audio:
+						artist = audio.get('artist', ['Unknown Artist'])[0] if audio.get('artist') else 'Unknown Artist'
+						title = audio.get('title', [Path(file_path).stem])[0] if audio.get('title') else Path(file_path).stem
+						self.now_playing_text.setText(f"{artist} - {title}")
+					else:
+						self.now_playing_text.setText(Path(file_path).stem)
+				except:
 					self.now_playing_text.setText(Path(file_path).stem)
-			except:
-				self.now_playing_text.setText(Path(file_path).stem)
 
 	def play_pause(self):
 		icon_color = 'white' if self.dark_mode else 'black'
@@ -1016,7 +966,8 @@ class MusicPlayer(QMainWindow):
 				self.stop()
 				return
 
-		song_path = self.current_playlist[self.current_track_index]
+		song = self.current_playlist[self.current_track_index]
+		song_path = song['path'] if isinstance(song, dict) else song
 		self.play_song(song_path)
 		self.highlight_current_song()
 
@@ -1029,7 +980,8 @@ class MusicPlayer(QMainWindow):
 		if self.current_track_index < 0:
 			self.current_track_index = 0
 
-		song_path = self.current_playlist[self.current_track_index]
+		song = self.current_playlist[self.current_track_index]
+		song_path = song['path'] if isinstance(song, dict) else song
 		self.play_song(song_path)
 		self.highlight_current_song()
 
@@ -1037,10 +989,15 @@ class MusicPlayer(QMainWindow):
 		if not self.current_playlist:
 			return
 
+		# Get current song path for comparison
+		current_song = self.current_playlist[self.current_track_index]
+		current_path = current_song['path'] if isinstance(current_song, dict) else current_song
+
 		# Find and select the current song in the table
 		for row in range(self.song_table.rowCount()):
-			song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-			if song_path == self.current_playlist[self.current_track_index]:
+			# Path is stored in UserRole+1 in populate_song_table_from_playlist
+			row_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
+			if row_path == current_path:
 				self.song_table.selectRow(row)
 				break
 
@@ -1370,7 +1327,9 @@ class MusicPlayer(QMainWindow):
 				random.shuffle(self.current_playlist)
 			self.populate_song_table_from_playlist()
 			self.current_track_index = 0
-			self.play_song(self.current_playlist[0])
+			first_song = self.current_playlist[0]
+			path = first_song['path'] if isinstance(first_song, dict) else first_song
+			self.play_song(path)
 
 	def on_artist_double_clicked(self, item):
 		import random
@@ -1415,7 +1374,9 @@ class MusicPlayer(QMainWindow):
 
 			self.populate_song_table_from_playlist()
 			self.current_track_index = 0
-			self.play_song(self.current_playlist[0])
+			first_song = self.current_playlist[0]
+			path = first_song['path'] if isinstance(first_song, dict) else first_song
+			self.play_song(path)
 
 	def on_album_double_clicked(self, item):
 		import random
@@ -1483,99 +1444,80 @@ class MusicPlayer(QMainWindow):
 
 			self.populate_song_table_from_playlist()
 			self.current_track_index = 0
-			self.play_song(self.current_playlist[0])
+			first_song = self.current_playlist[0]
+			path = first_song['path'] if isinstance(first_song, dict) else first_song
+			self.play_song(path)
 
 	def populate_song_table_from_playlist(self):
-			from mutagen import File
-
 			self.song_table.setRowCount(0)
 			self.song_table.setSortingEnabled(False)
 
-			for i, song_path in enumerate(self.current_playlist):
+			for i, song in enumerate(self.current_playlist):
 				self.song_table.insertRow(i)
 
-				# Read metadata for track info
-				try:
-					audio = File(song_path, easy=True)
-
-					if audio:
-						# Track number
-						track_num_raw = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
-						if '/' in str(track_num_raw):
-							track_num_display = track_num_raw.split('/')[0]
-						else:
-							track_num_display = track_num_raw
-
-						try:
-							track_num_sort = int(track_num_display)
-						except:
-							track_num_sort = 999
-
-						# Title
-						title = audio.get('title', [Path(song_path).stem])[0] if audio.get('title') else Path(song_path).stem
-
-						# Year
-						year_raw = audio.get('date', [''])[0] if audio.get('date') else ''
-						if '-' in str(year_raw):
-							year_display = year_raw.split('-')[0]
-						else:
-							year_display = year_raw
-
-						try:
-							year_sort = int(year_display)
-						except:
-							year_sort = 0
-
-						# Duration
-						duration = audio.info.length if hasattr(audio, 'info') else 0
-						if duration >= 3600:
-							hours = int(duration // 3600)
-							minutes = int((duration % 3600) // 60)
-							seconds = int(duration % 60)
-							time_str = f"{hours}:{minutes:02d}:{seconds:02d}"
-						else:
-							minutes = int(duration // 60)
-							seconds = int(duration % 60)
-							time_str = f"{minutes}:{seconds:02d}"
-
-						# Artist
-						artist_name = audio.get('artist', [''])[0] if audio.get('artist') else ''
-
-						# Album
-						album_name = audio.get('album', [''])[0] if audio.get('album') else ''
-
-						# Genre
-						genre_name = audio.get('genre', [''])[0] if audio.get('genre') else ''
-
-					else:
-						track_num_display = ''
-						track_num_sort = 999
-						title = Path(song_path).stem
-						year_display = ''
-						year_sort = 0
-						time_str = ''
-						duration = 0
-						artist_name = ''
-						album_name = ''
-						genre_name = ''
-				except:
-					track_num_display = ''
-					track_num_sort = 999
+				if isinstance(song, dict):
+					# Use cached metadata
+					song_path = song.get('path', '')
+					track_num_raw = song.get('tracknumber', '')
+					title = song.get('title', Path(song_path).stem)
+					artist_name = song.get('artist', '')
+					album_name = song.get('album', '')
+					genre_name = song.get('genre', '')
+					year_raw = song.get('year', '')
+					duration = song.get('duration', 0)
+				else:
+					# Fallback for old format
+					song_path = song
+					track_num_raw = ''
 					title = Path(song_path).stem
-					year_display = ''
-					year_sort = 0
-					time_str = ''
-					duration = 0
 					artist_name = ''
 					album_name = ''
 					genre_name = ''
+					year_raw = ''
+					duration = 0
+
+				# Track number processing
+				if '/' in str(track_num_raw):
+					track_num_display = str(track_num_raw).split('/')[0]
+				else:
+					track_num_display = str(track_num_raw)
+
+				try:
+					track_num_sort = int(track_num_display)
+				except:
+					track_num_sort = 999
+
+				# Year processing
+				if '-' in str(year_raw):
+					year_display = str(year_raw).split('-')[0]
+				else:
+					year_display = str(year_raw)
+
+				try:
+					year_sort = int(year_display)
+				except:
+					year_sort = 0
+
+				# Duration processing
+				if duration >= 3600:
+					hours = int(duration // 3600)
+					minutes = int((duration % 3600) // 60)
+					seconds = int(duration % 60)
+					time_str = f"{hours}:{minutes:02d}:{seconds:02d}"
+				else:
+					minutes = int(duration // 60)
+					seconds = int(duration % 60)
+					time_str = f"{minutes}:{seconds:02d}"
 
 				# Populate columns
 				track_item = NumericTableWidgetItem(str(track_num_display))
 				track_item.setData(Qt.ItemDataRole.UserRole, track_num_sort)
 				self.song_table.setItem(i, 0, track_item)
 
-				self.song_table.setItem(i, 1, QTableWidgetItem(title))
+				title_item = QTableWidgetItem(title)
+				title_item.setData(Qt.ItemDataRole.UserRole, song_path) # Store path for playback
+				self.song_table.setItem(i, 1, title_item)
+				
 				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
 				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
 
@@ -1588,6 +1530,9 @@ class MusicPlayer(QMainWindow):
 				self.song_table.setItem(i, 5, time_item)
 
 				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
+				
+				# CRITICAL: Store path in UserRole+1 of the first column for double-click access
+				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole + 1, song_path)
 
 				# Store the file path invisibly for playback
 				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole + 1, song_path)
@@ -1988,33 +1933,31 @@ class MusicPlayer(QMainWindow):
 		self.save_settings()
 
 	def sort_playlist(self, playlist):
-		from mutagen import File
+		def get_sort_key(song):
+			# Handle both new dict format and old path format
+			if isinstance(song, dict):
+				track_num_raw = song.get('tracknumber', '9999')
+				title = song.get('title', Path(song['path']).stem)
+				path = song['path']
+			else:
+				# Fallback for old library format during transition
+				return (9999, Path(song).stem.lower())
 
-		def get_sort_key(song_path):
 			try:
-				audio = File(song_path, easy=True)
-				if audio:
-					# Get track number
-					track_num = audio.get('tracknumber', ['9999'])[0]
-					# Handle "1/12" format
-					if '/' in str(track_num):
-						track_num = track_num.split('/')[0]
-					try:
-						track_num = int(track_num)
-					except:
-						track_num = 9999  # Put tracks without numbers at the end
-
-					# Get title for secondary sort
-					title = audio.get('title', [Path(song_path).stem])[0]
-					if not title:
-						title = Path(song_path).stem
-
-					return (track_num, title.lower())
+				# Handle "1/12" format
+				if '/' in str(track_num_raw):
+					track_num = track_num_raw.split('/')[0]
 				else:
-					# No metadata, sort by filename
-					return (9999, Path(song_path).stem.lower())
+					track_num = track_num_raw
+
+				try:
+					track_num = int(track_num)
+				except:
+					track_num = 9999  # Put tracks without numbers at the end
+
+				return (track_num, title.lower())
 			except:
-				return (9999, Path(song_path).stem.lower())
+				return (9999, Path(path).stem.lower())
 
 		return sorted(playlist, key=get_sort_key)
 
