@@ -690,6 +690,7 @@ class MusicPlayer(QMainWindow):
 
 	def populate_genre_tree(self):
 		self.genre_tree.clear()
+		QTreeWidgetItem(self.genre_tree, ["All Genres"])
 		for genre in sorted(self.library.keys()):
 			QTreeWidgetItem(self.genre_tree, [genre])
 
@@ -698,12 +699,33 @@ class MusicPlayer(QMainWindow):
 		self.artist_tree.clear()
 		self.album_tree.clear()
 		self.song_table.setRowCount(0)
+		self.song_table.setSortingEnabled(False)
 
-		if genre in self.library:
-			for artist in sorted(self.library[genre].keys()):
+		all_songs = []
+		artists = set()
+
+		if genre == "All Genres":
+			for g in self.library:
+				for a in self.library[g]:
+					artists.add(a)
+					for alb in self.library[g][a]:
+						all_songs.extend(self.library[g][a][alb])
+		elif genre in self.library:
+			for a in self.library[genre]:
+				artists.add(a)
+				for alb in self.library[genre][a]:
+					all_songs.extend(self.library[genre][a][alb])
+
+		if artists:
+			QTreeWidgetItem(self.artist_tree, ["All Artists"])
+			for artist in sorted(list(artists)):
 				QTreeWidgetItem(self.artist_tree, [artist])
 
-		#self.save_settings()
+		if all_songs:
+			self.current_playlist = self.sort_playlist(all_songs)
+			self.populate_song_table_from_playlist()
+
+		self.song_table.setSortingEnabled(True)
 
 	def on_artist_selected(self, item):
 		genre_item = self.genre_tree.currentItem()
@@ -715,12 +737,47 @@ class MusicPlayer(QMainWindow):
 
 		self.album_tree.clear()
 		self.song_table.setRowCount(0)
+		self.song_table.setSortingEnabled(False)
 
-		if artist in self.library[genre]:
-			for album in sorted(self.library[genre][artist].keys()):
+		all_songs = []
+		albums = set()
+
+		if artist == "All Artists":
+			# Get all albums for the selected genre(s)
+			if genre == "All Genres":
+				for g in self.library:
+					for a in self.library[g]:
+						for alb in self.library[g][a]:
+							albums.add(alb)
+							all_songs.extend(self.library[g][a][alb])
+			elif genre in self.library:
+				for a in self.library[genre]:
+					for alb in self.library[genre][a]:
+						albums.add(alb)
+						all_songs.extend(self.library[genre][a][alb])
+		else:
+			# Specific artist
+			if genre == "All Genres":
+				for g in self.library:
+					if artist in self.library[g]:
+						for alb in self.library[g][artist]:
+							albums.add(alb)
+							all_songs.extend(self.library[g][artist][alb])
+			elif genre in self.library and artist in self.library[genre]:
+				for alb in self.library[genre][artist]:
+					albums.add(alb)
+					all_songs.extend(self.library[genre][artist][alb])
+
+		if albums:
+			QTreeWidgetItem(self.album_tree, ["All Albums"])
+			for album in sorted(list(albums)):
 				QTreeWidgetItem(self.album_tree, [album])
 
-		#self.save_settings()
+		if all_songs:
+			self.current_playlist = self.sort_playlist(all_songs)
+			self.populate_song_table_from_playlist()
+
+		self.song_table.setSortingEnabled(True)
 
 	def on_album_selected(self, item):
 		from mutagen import File
@@ -738,13 +795,56 @@ class MusicPlayer(QMainWindow):
 		self.song_table.setRowCount(0)
 		self.song_table.setSortingEnabled(False)
 
-		if album in self.library[genre][artist]:
-			self.current_songs = self.library[genre][artist][album]
+		all_songs = []
 
-			# Sort songs by track number/title
-			self.current_songs = self.sort_playlist(self.current_songs)
+		if album == "All Albums":
+			# Get all songs for the selected artist(s) and genre(s)
+			if genre == "All Genres":
+				if artist == "All Artists":
+					for g in self.library:
+						for a in self.library[g]:
+							for alb in self.library[g][a]:
+								all_songs.extend(self.library[g][a][alb])
+				else:
+					for g in self.library:
+						if artist in self.library[g]:
+							for alb in self.library[g][artist]:
+								all_songs.extend(self.library[g][artist][alb])
+			else:
+				if artist == "All Artists":
+					for a in self.library[genre]:
+						for alb in self.library[genre][a]:
+							all_songs.extend(self.library[genre][a][alb])
+				else:
+					for alb in self.library[genre][artist]:
+						all_songs.extend(self.library[genre][artist][alb])
+		else:
+			# Specific album
+			if genre == "All Genres":
+				if artist == "All Artists":
+					# This is tricky - album might exist in multiple genres/artists
+					for g in self.library:
+						for a in self.library[g]:
+							if album in self.library[g][a]:
+								all_songs.extend(self.library[g][a][album])
+				else:
+					for g in self.library:
+						if artist in self.library[g] and album in self.library[g][artist]:
+							all_songs.extend(self.library[g][artist][album])
+			else:
+				if artist == "All Artists":
+					for a in self.library[genre]:
+						if album in self.library[genre][a]:
+							all_songs.extend(self.library[genre][a][album])
+				else:
+					if album in self.library[genre][artist]:
+						all_songs.extend(self.library[genre][artist][album])
 
-			for i, song_path in enumerate(self.current_songs):
+		if all_songs:
+			self.current_songs = all_songs
+			self.current_playlist = self.sort_playlist(all_songs)
+			
+			for i, song_path in enumerate(self.current_playlist):
 				self.song_table.insertRow(i)
 
 				# Read metadata for track info
@@ -754,7 +854,6 @@ class MusicPlayer(QMainWindow):
 					if audio:
 						# Track number
 						track_num_raw = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
-						# Handle "1/12" format, just take first number
 						if '/' in str(track_num_raw):
 							track_num_display = track_num_raw.split('/')[0]
 						else:
@@ -770,7 +869,6 @@ class MusicPlayer(QMainWindow):
 
 						# Year
 						year_raw = audio.get('date', [''])[0] if audio.get('date') else ''
-						# Handle full dates like "2015-01-01", just take year
 						if '-' in str(year_raw):
 							year_display = year_raw.split('-')[0]
 						else:
@@ -852,12 +950,12 @@ class MusicPlayer(QMainWindow):
 
 	def on_song_double_clicked(self, item):
 		row = item.row()
-		song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+		song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
 
 		# Build playlist from current song table
 		self.current_playlist = []
 		for i in range(self.song_table.rowCount()):
-			path = self.song_table.item(i, 0).data(Qt.ItemDataRole.UserRole)
+			path = self.song_table.item(i, 0).data(Qt.ItemDataRole.UserRole + 1)
 			self.current_playlist.append(path)
 
 		self.current_track_index = row
@@ -1257,8 +1355,12 @@ class MusicPlayer(QMainWindow):
 		genre = item.text(0)
 		self.current_playlist = []
 
-		# Collect all songs in this genre
-		if genre in self.library:
+		if genre == "All Genres":
+			for g in self.library:
+				for a in self.library[g]:
+					for alb in self.library[g][a]:
+						self.current_playlist.extend(self.library[g][a][alb])
+		elif genre in self.library:
 			for artist in self.library[genre].values():
 				for album in artist.values():
 					self.current_playlist.extend(album)
