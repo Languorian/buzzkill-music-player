@@ -38,7 +38,7 @@ class LibraryScanner(QThread):
 		for folder_path in self.watched_folders:
 			if not os.path.exists(folder_path):
 				continue
-				
+
 			for root, dirs, files in os.walk(folder_path):
 				for file in files:
 					if Path(file).suffix.lower() in audio_extensions:
@@ -68,7 +68,7 @@ class LibraryScanner(QThread):
 
 						except:
 							continue
-		
+
 		self.finished.emit(new_library)
 
 class ColorPickerDialog(QDialog):
@@ -76,21 +76,21 @@ class ColorPickerDialog(QDialog):
 		super().__init__(parent)
 		self.setWindowTitle("Select Accent Color")
 		self.setFixedWidth(300)
-		
+
 		layout = QVBoxLayout(self)
-		
+
 		# Current color preview
 		self.color = QColor(initial_color)
 		self.preview = QWidget()
 		self.preview.setFixedHeight(80)
 		self.update_preview()
 		layout.addWidget(self.preview)
-		
+
 		# RGB Sliders
 		self.r_slider = self.create_slider("R", self.color.red(), layout)
 		self.g_slider = self.create_slider("G", self.color.green(), layout)
 		self.b_slider = self.create_slider("B", self.color.blue(), layout)
-		
+
 		# HEX Input
 		hex_layout = QHBoxLayout()
 		hex_layout.addWidget(QLabel("HEX:"))
@@ -98,15 +98,19 @@ class ColorPickerDialog(QDialog):
 		self.hex_input.textChanged.connect(self.on_hex_changed)
 		hex_layout.addWidget(self.hex_input)
 		layout.addLayout(hex_layout)
-		
+
 		# Buttons
 		btn_layout = QHBoxLayout()
 		ok_btn = QPushButton("OK")
 		ok_btn.clicked.connect(self.accept)
 		cancel_btn = QPushButton("Cancel")
 		cancel_btn.clicked.connect(self.reject)
+		default_btn = QPushButton("Default")
+		default_btn.clicked.connect(lambda: self.hex_input.setText("#0E47A1"))
+
 		btn_layout.addWidget(ok_btn)
 		btn_layout.addWidget(cancel_btn)
+		btn_layout.addWidget(default_btn)
 		layout.addLayout(btn_layout)
 
 	def create_slider(self, label, value, parent_layout):
@@ -117,12 +121,12 @@ class ColorPickerDialog(QDialog):
 		slider.setValue(value)
 		slider.valueChanged.connect(self.on_slider_changed)
 		layout.addWidget(slider)
-		
+
 		val_label = QLabel(str(value))
 		val_label.setFixedWidth(30)
 		layout.addWidget(val_label)
 		slider.valueChanged.connect(lambda v: val_label.setText(str(v)))
-		
+
 		parent_layout.addLayout(layout)
 		return slider
 
@@ -153,11 +157,36 @@ class ColorPickerDialog(QDialog):
 	def get_color(self):
 		return self.color.name()
 
+class ScalableLabel(QLabel):
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setMinimumSize(1, 1)
+		self._original_pixmap = None
+
+	def setPixmap(self, pixmap):
+		self._original_pixmap = pixmap
+		if pixmap and not pixmap.isNull():
+			# Use current size, but fallback to sizeHint if size is too small
+			target_size = self.size()
+			if target_size.width() < 10 or target_size.height() < 10:
+				target_size = QSize(300, 300)
+
+			scaled = pixmap.scaled(target_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+			super().setPixmap(scaled)
+		else:
+			super().setPixmap(QPixmap())
+
+	def resizeEvent(self, event):
+		if self._original_pixmap and not self._original_pixmap.isNull():
+			scaled = self._original_pixmap.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+			super().setPixmap(scaled)
+		super().resizeEvent(event)
+
 class MusicPlayer(QMainWindow):
 	def __init__(self):
 		super().__init__()
 
-		self.setWindowTitle("BUZZKILL by Languorian")
+		self.setWindowTitle("Buzzkill Music Player")
 
 		# Default size (will be overridden by load_settings if saved geometry exists)
 		self.setGeometry(100, 100, 1200, 720)
@@ -217,10 +246,11 @@ class MusicPlayer(QMainWindow):
 		self.remember_position = False
 		self.rounded_buttons = True
 		self.accent_color = "#1976d2"
+		self.show_album_art = False
 
 		self.init_ui()
 		self.load_library()
-		
+
 		# Background rescan on startup if we have folders saved
 		if self.watched_folders:
 			self.rescan_library()
@@ -293,6 +323,16 @@ class MusicPlayer(QMainWindow):
 		self.remember_position_btn.setFlat(True)
 		self.remember_position_btn.clicked.connect(self.toggle_remember_position)
 		left_controls.addWidget(self.remember_position_btn)
+
+		# Show album art toggle button
+		self.show_album_art_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color, use_style_path=True))
+		self.show_album_art_btn.setIconSize(self.icon_size)
+		self.show_album_art_btn.setToolTip("Show album artwork")
+		self.show_album_art_btn.setFlat(True)
+		self.show_album_art_btn.clicked.connect(self.toggle_album_art)
+		left_controls.addWidget(self.show_album_art_btn)
 
 		# Button style toggle button (straight/rounded)
 		self.button_style_btn = QPushButton()
@@ -519,8 +559,18 @@ class MusicPlayer(QMainWindow):
 		self.album_tree.itemDoubleClicked.connect(self.on_album_double_clicked)
 		self.horizontal_splitter.addWidget(self.album_tree)
 
+		# Album artwork column
+		self.album_art_label = ScalableLabel()
+		self.album_art_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+		self.album_art_label.setStyleSheet("border: 1px solid #3d3d3d; background-color: #000000;")
+		self.horizontal_splitter.addWidget(self.album_art_label)
+		self.album_art_label.hide()
+
 		self.splitter.addWidget(self.horizontal_splitter)
 		self.horizontal_splitter.splitterMoved.connect(lambda: self.save_settings())
+
+		# Connect source change to update album art
+		self.player.sourceChanged.connect(self.update_album_art)
 
 		#==============================================
 		#==============     ROW 3    ==================
@@ -551,7 +601,7 @@ class MusicPlayer(QMainWindow):
 		if folder:
 			if folder not in self.watched_folders:
 				self.watched_folders.append(folder)
-			
+
 			# Trigger a background rescan which will also update the status bar
 			self.rescan_library()
 
@@ -883,7 +933,8 @@ class MusicPlayer(QMainWindow):
 			'remember_position': self.remember_position,
 			'volume': self.volume_slider.value(),
 			'rounded_buttons': self.rounded_buttons,
-			'accent_color': self.accent_color
+			'accent_color': self.accent_color,
+			'show_album_art': self.show_album_art
 		}
 
 		try:
@@ -984,12 +1035,22 @@ class MusicPlayer(QMainWindow):
 				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color, use_style_path=True))
 				self.remember_position_btn.setToolTip("Remember playback position (Off)")
 
+			# Restore album art state
+			self.show_album_art = settings.get('show_album_art', False)
+			if self.show_album_art:
+				self.album_art_label.show()
+				self.update_album_art()
+			else:
+				self.album_art_label.hide()
+
 			# Apply theme after loading all settings
 			self.apply_theme()
 
 			# Reload all style-affected icons with the restored button style
 			self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color, use_style_path=True))
 			self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color, use_style_path=True))
+			self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color, use_style_path=True))
+			self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color, use_style_path=True))
 			self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
 			self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
 			self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
@@ -1050,11 +1111,11 @@ class MusicPlayer(QMainWindow):
 			genre_item = self.genre_tree.currentItem()
 			artist_item = self.artist_tree.currentItem()
 			album_item = self.album_tree.currentItem()
-			
+
 			sel_genre = genre_item.text(0) if genre_item else None
 			sel_artist = artist_item.text(0) if artist_item else None
 			sel_album = album_item.text(0) if album_item else None
-			
+
 			# Capture currently selected song path
 			sel_song = None
 			curr_row = self.song_table.currentRow()
@@ -1064,11 +1125,11 @@ class MusicPlayer(QMainWindow):
 			self.library = new_library
 			self.populate_genre_tree()
 			self.save_library()
-			
+
 			# Restore selection if it still exists in the new library
 			if sel_genre:
 				self.restore_selection(sel_genre, sel_artist, sel_album, sel_song)
-				
+
 			self.statusBar().showMessage("Library scan complete", 5000)
 			print("Background rescan complete")
 		else:
@@ -1404,6 +1465,7 @@ class MusicPlayer(QMainWindow):
 		self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color, use_style_path=True))
 		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color, use_style_path=True))
 		self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color, use_style_path=True))
+		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color, use_style_path=True))
 
 		style_icon = 'rounded.svg' if self.rounded_buttons else 'straight.svg'
 		self.button_style_btn.setIcon(self.load_icon(style_icon, icon_color, use_style_path=False))
@@ -1457,6 +1519,7 @@ class MusicPlayer(QMainWindow):
 		self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color, use_style_path=True))
 		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color, use_style_path=True))
 		self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color, use_style_path=True))
+		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color, use_style_path=True))
 		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
 		self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
 		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
@@ -1714,6 +1777,61 @@ class MusicPlayer(QMainWindow):
 
 			self.save_settings()
 
+	def toggle_album_art(self):
+		self.show_album_art = not self.show_album_art
+
+		if self.show_album_art:
+			self.album_art_label.show()
+			self.update_album_art()
+			# Equalize 4 columns
+			total_width = self.horizontal_splitter.width()
+			equal_width = total_width // 4
+			self.horizontal_splitter.setSizes([equal_width] * 4)
+		else:
+			self.album_art_label.hide()
+			# Equalize 3 columns
+			total_width = self.horizontal_splitter.width()
+			equal_width = total_width // 3
+			self.horizontal_splitter.setSizes([equal_width, equal_width, equal_width, 0])
+
+		self.save_settings()
+
+	def update_album_art(self):
+		if not self.show_album_art:
+			return
+
+		source = self.player.source().toLocalFile()
+		if not source or not Path(source).exists():
+			self.album_art_label.clear()
+			self.album_art_label.setText("No track playing")
+			return
+
+		from mutagen import File
+		try:
+			audio = File(source)
+			artwork = None
+
+			if audio:
+				# Handle different tag formats
+				if 'APIC:' in audio: # ID3 (MP3)
+					artwork = audio['APIC:'].data
+				elif audio.pictures: # FLAC
+					artwork = audio.pictures[0].data
+				elif 'covr' in audio: # MP4/M4A
+					artwork = audio['covr'][0]
+
+			if artwork:
+				pixmap = QPixmap()
+				pixmap.loadFromData(artwork)
+				self.album_art_label.setPixmap(pixmap)
+			else:
+				self.album_art_label.clear()
+				self.album_art_label.setText("No artwork found")
+		except Exception as e:
+			print(f"Error loading album art: {e}")
+			self.album_art_label.clear()
+			self.album_art_label.setText("Error loading art")
+
 	def restore_playback_position(self):
 		#print(f"DEBUG - Remember position enabled: {self.remember_position}")
 		#print(f"DEBUG - Position file exists: {self.playback_position_file.exists()}")
@@ -1788,7 +1906,7 @@ if __name__ == '__main__':
 		try:
 			import ctypes
 			# Set a unique App User Model ID
-			app_id = 'Languorian.Buzzkill.1.0'
+			app_id = 'Buzzkill.Music.Player.1.0'
 			ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
 		except Exception as e:
 			print(f"Could not set App User Model ID: {e}")
