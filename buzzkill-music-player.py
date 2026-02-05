@@ -758,9 +758,15 @@ class MusicPlayer(QMainWindow):
 
 						# Duration
 						duration = audio.info.length if hasattr(audio, 'info') else 0
-						minutes = int(duration // 60)
-						seconds = int(duration % 60)
-						time_str = f"{minutes}:{seconds:02d}"
+						if duration >= 3600:
+							hours = int(duration // 3600)
+							minutes = int((duration % 3600) // 60)
+							seconds = int(duration % 60)
+							time_str = f"{hours}:{minutes:02d}:{seconds:02d}"
+						else:
+							minutes = int(duration // 60)
+							seconds = int(duration % 60)
+							time_str = f"{minutes}:{seconds:02d}"
 
 						# Artist
 						artist_name = audio.get('artist', [''])[0] if audio.get('artist') else ''
@@ -1307,9 +1313,15 @@ class MusicPlayer(QMainWindow):
 
 						# Duration
 						duration = audio.info.length if hasattr(audio, 'info') else 0
-						minutes = int(duration // 60)
-						seconds = int(duration % 60)
-						time_str = f"{minutes}:{seconds:02d}"
+						if duration >= 3600:
+							hours = int(duration // 3600)
+							minutes = int((duration % 3600) // 60)
+							seconds = int(duration % 60)
+							time_str = f"{hours}:{minutes:02d}:{seconds:02d}"
+						else:
+							minutes = int(duration // 60)
+							seconds = int(duration % 60)
+							time_str = f"{minutes}:{seconds:02d}"
 
 						# Artist
 						artist_name = audio.get('artist', [''])[0] if audio.get('artist') else ''
