@@ -50,3 +50,6 @@ sudo apt install python3-venv
 
 ## Special Thanks
 Unicons by [Flaticon](https://www.flaticon.com/uicons).
+
+## AI Disclaimer
+100% of this application was vibe coded. I am not a programmer. The only reason I started this project is because I couldn't find a suitable alternative for MusicBee on Linux.
