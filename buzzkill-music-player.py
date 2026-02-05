@@ -505,7 +505,7 @@ class MusicPlayer(QMainWindow):
 		packed_layout = QHBoxLayout()
 		packed_layout.setSpacing(8)
 
-		self.progress_label = QLabel("0:00:00")
+		self.progress_label = QLabel("0:00")
 		packed_layout.addWidget(self.progress_label)
 
 		self.progress_slider = ClickableSlider(Qt.Orientation.Horizontal)
@@ -518,7 +518,7 @@ class MusicPlayer(QMainWindow):
 		self.progress_slider.sliderMoved.connect(self.on_progress_slider_moved)
 		packed_layout.addWidget(self.progress_slider)
 
-		self.duration_label = QLabel("0:00:00")
+		self.duration_label = QLabel("0:00")
 		packed_layout.addWidget(self.duration_label)
 
 		progress_layout = QHBoxLayout()
@@ -1147,16 +1147,26 @@ class MusicPlayer(QMainWindow):
 				self.progress_slider.setValue(int((position / duration) * 1000))
 
 			# Update time label
-			hours = int(position / 3600000)
-			minutes = int((position % 3600000) / 60000)
-			seconds = int((position % 60000) / 1000)
-			self.progress_label.setText(f"{hours}:{minutes:02d}:{seconds:02d}")
+			if duration >= 3600000:
+				hours = int(position / 3600000)
+				minutes = int((position % 3600000) / 60000)
+				seconds = int((position % 60000) / 1000)
+				self.progress_label.setText(f"{hours}:{minutes:02d}:{seconds:02d}")
+			else:
+				minutes = int(position / 60000)
+				seconds = int((position % 60000) / 1000)
+				self.progress_label.setText(f"{minutes}:{seconds:02d}")
 
 	def update_duration(self, duration):
-		hours = int(duration / 3600000)
-		minutes = int((duration % 3600000) / 60000)
-		seconds = int((duration % 60000) / 1000)
-		self.duration_label.setText(f"{hours}:{minutes:02d}:{seconds:02d}")
+		if duration >= 3600000:
+			hours = int(duration / 3600000)
+			minutes = int((duration % 3600000) / 60000)
+			seconds = int((duration % 60000) / 1000)
+			self.duration_label.setText(f"{hours}:{minutes:02d}:{seconds:02d}")
+		else:
+			minutes = int(duration / 60000)
+			seconds = int((duration % 60000) / 1000)
+			self.duration_label.setText(f"{minutes}:{seconds:02d}")
 
 	def change_volume(self, value):
 		icon_color = 'white' if self.dark_mode else 'black'
