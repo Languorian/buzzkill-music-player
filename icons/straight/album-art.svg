@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   id="Layer_1"
+   data-name="Layer 1"
+   viewBox="0 0 24 24"
+   width="512"
+   height="512"
+   version="1.1"
+   sodipodi:docname="album-art.svg"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.5761719"
+     inkscape:cx="279.79182"
+     inkscape:cy="305.48699"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="Layer_1" />
+  <path
+     d="M8.293,11.121,0,19.414V24H22.586L9.707,11.121A1,1,0,0,0,8.293,11.121Z"
+     id="path1" />
+  <path
+     d="M 11.121,9.707 24,22.586 V 0 H 0 V 16.586 L 6.879,9.707 c 1.1714996,-1.1711458 3.0705004,-1.1711458 4.242,0 z M 18,2 c 3.563867,0 5.348013,4.3085542 2.828283,6.8282834 C 18.308554,11.348013 14,9.5638672 14,6 14,3.790861 15.790861,2 18,2 Z"
+     id="path2"
+     sodipodi:nodetypes="cccccccssss" />
+  <circle
+     cx="18"
+     cy="6"
+     r="2"
+     id="circle2" />
+</svg>

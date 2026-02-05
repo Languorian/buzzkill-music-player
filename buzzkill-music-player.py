@@ -495,32 +495,32 @@ class MusicPlayer(QMainWindow):
 		# Library browser (2 rows)
 		self.splitter = QSplitter(Qt.Orientation.Vertical)
 
-		# Row 1: Genre/Artist/Album columns
-		top_widget = QWidget()
-		top_layout = QHBoxLayout(top_widget)
+		# Row 1: Genre/Artist/Album columns (Resizable Splitter)
+		self.horizontal_splitter = QSplitter(Qt.Orientation.Horizontal)
 
 		# Genre column
 		self.genre_tree = QTreeWidget()
 		self.genre_tree.setHeaderLabel("Genre")
 		self.genre_tree.itemClicked.connect(self.on_genre_selected)
 		self.genre_tree.itemDoubleClicked.connect(self.on_genre_double_clicked)
-		top_layout.addWidget(self.genre_tree)
+		self.horizontal_splitter.addWidget(self.genre_tree)
 
 		# Artist column
 		self.artist_tree = QTreeWidget()
 		self.artist_tree.setHeaderLabel("Artist")
 		self.artist_tree.itemClicked.connect(self.on_artist_selected)
 		self.artist_tree.itemDoubleClicked.connect(self.on_artist_double_clicked)
-		top_layout.addWidget(self.artist_tree)
+		self.horizontal_splitter.addWidget(self.artist_tree)
 
 		# Album column
 		self.album_tree = QTreeWidget()
 		self.album_tree.setHeaderLabel("Album")
 		self.album_tree.itemClicked.connect(self.on_album_selected)
 		self.album_tree.itemDoubleClicked.connect(self.on_album_double_clicked)
-		top_layout.addWidget(self.album_tree)
+		self.horizontal_splitter.addWidget(self.album_tree)
 
-		self.splitter.addWidget(top_widget)
+		self.splitter.addWidget(self.horizontal_splitter)
+		self.horizontal_splitter.splitterMoved.connect(lambda: self.save_settings())
 
 		#==============================================
 		#==============     ROW 3    ==================
@@ -534,6 +534,7 @@ class MusicPlayer(QMainWindow):
 		self.song_table.itemDoubleClicked.connect(self.on_song_double_clicked)
 		self.song_table.horizontalHeader().sectionResized.connect(self.save_settings)
 		self.splitter.addWidget(self.song_table)
+		self.splitter.splitterMoved.connect(lambda: self.save_settings())
 
 		# Set stretch factors: 0 for row 2 (don't stretch), 1 for row 3 (take all extra space)
 		self.splitter.setStretchFactor(0, 0)  # top_widget (genre/artist/album) - no stretch
@@ -870,6 +871,7 @@ class MusicPlayer(QMainWindow):
 				self.song_table.columnWidth(6)
 			],
 			'splitter_sizes': self.splitter.sizes(),
+			'horizontal_splitter_sizes': self.horizontal_splitter.sizes(),
 			'window_geometry': [self.x(), self.y(), self.width(), self.height()],
 			'window_maximized': self.isMaximized(),
 			'selected_genre': genre_item.text(0) if genre_item else None,
@@ -915,6 +917,11 @@ class MusicPlayer(QMainWindow):
 			splitter_sizes = settings.get('splitter_sizes')
 			if splitter_sizes:
 				self.splitter.setSizes(splitter_sizes)
+
+			# Restore horizontal splitter sizes
+			horizontal_splitter_sizes = settings.get('horizontal_splitter_sizes')
+			if horizontal_splitter_sizes:
+				self.horizontal_splitter.setSizes(horizontal_splitter_sizes)
 
 			# Restore window geometry
 			window_geometry = settings.get('window_geometry')
