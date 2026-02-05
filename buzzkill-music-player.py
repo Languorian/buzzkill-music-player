@@ -690,7 +690,8 @@ class MusicPlayer(QMainWindow):
 
 	def populate_genre_tree(self):
 		self.genre_tree.clear()
-		QTreeWidgetItem(self.genre_tree, ["All Genres"])
+		genre_count = len(self.library.keys())
+		QTreeWidgetItem(self.genre_tree, [f"All Genres ({genre_count})"])
 		for genre in sorted(self.library.keys()):
 			QTreeWidgetItem(self.genre_tree, [genre])
 
@@ -704,7 +705,7 @@ class MusicPlayer(QMainWindow):
 		all_songs = []
 		artists = set()
 
-		if genre == "All Genres":
+		if genre.startswith("All Genres"):
 			for g in self.library:
 				for a in self.library[g]:
 					artists.add(a)
@@ -717,7 +718,7 @@ class MusicPlayer(QMainWindow):
 					all_songs.extend(self.library[genre][a][alb])
 
 		if artists:
-			QTreeWidgetItem(self.artist_tree, ["All Artists"])
+			QTreeWidgetItem(self.artist_tree, [f"All Artists ({len(artists)})"])
 			for artist in sorted(list(artists)):
 				QTreeWidgetItem(self.artist_tree, [artist])
 
@@ -742,9 +743,9 @@ class MusicPlayer(QMainWindow):
 		all_songs = []
 		albums = set()
 
-		if artist == "All Artists":
+		if artist.startswith("All Artists"):
 			# Get all albums for the selected genre(s)
-			if genre == "All Genres":
+			if genre.startswith("All Genres"):
 				for g in self.library:
 					for a in self.library[g]:
 						for alb in self.library[g][a]:
@@ -757,7 +758,7 @@ class MusicPlayer(QMainWindow):
 						all_songs.extend(self.library[genre][a][alb])
 		else:
 			# Specific artist
-			if genre == "All Genres":
+			if genre.startswith("All Genres"):
 				for g in self.library:
 					if artist in self.library[g]:
 						for alb in self.library[g][artist]:
@@ -769,7 +770,7 @@ class MusicPlayer(QMainWindow):
 					all_songs.extend(self.library[genre][artist][alb])
 
 		if albums:
-			QTreeWidgetItem(self.album_tree, ["All Albums"])
+			QTreeWidgetItem(self.album_tree, [f"All Albums ({len(albums)})"])
 			for album in sorted(list(albums)):
 				QTreeWidgetItem(self.album_tree, [album])
 
@@ -797,10 +798,10 @@ class MusicPlayer(QMainWindow):
 
 		all_songs = []
 
-		if album == "All Albums":
+		if album.startswith("All Albums"):
 			# Get all songs for the selected artist(s) and genre(s)
-			if genre == "All Genres":
-				if artist == "All Artists":
+			if genre.startswith("All Genres"):
+				if artist.startswith("All Artists"):
 					for g in self.library:
 						for a in self.library[g]:
 							for alb in self.library[g][a]:
@@ -811,7 +812,7 @@ class MusicPlayer(QMainWindow):
 							for alb in self.library[g][artist]:
 								all_songs.extend(self.library[g][artist][alb])
 			else:
-				if artist == "All Artists":
+				if artist.startswith("All Artists"):
 					for a in self.library[genre]:
 						for alb in self.library[genre][a]:
 							all_songs.extend(self.library[genre][a][alb])
@@ -820,8 +821,8 @@ class MusicPlayer(QMainWindow):
 						all_songs.extend(self.library[genre][artist][alb])
 		else:
 			# Specific album
-			if genre == "All Genres":
-				if artist == "All Artists":
+			if genre.startswith("All Genres"):
+				if artist.startswith("All Artists"):
 					# This is tricky - album might exist in multiple genres/artists
 					for g in self.library:
 						for a in self.library[g]:
@@ -832,7 +833,7 @@ class MusicPlayer(QMainWindow):
 						if artist in self.library[g] and album in self.library[g][artist]:
 							all_songs.extend(self.library[g][artist][album])
 			else:
-				if artist == "All Artists":
+				if artist.startswith("All Artists"):
 					for a in self.library[genre]:
 						if album in self.library[genre][a]:
 							all_songs.extend(self.library[genre][a][album])
@@ -1355,7 +1356,7 @@ class MusicPlayer(QMainWindow):
 		genre = item.text(0)
 		self.current_playlist = []
 
-		if genre == "All Genres":
+		if genre.startswith("All Genres"):
 			for g in self.library:
 				for a in self.library[g]:
 					for alb in self.library[g][a]:
@@ -1387,10 +1388,26 @@ class MusicPlayer(QMainWindow):
 		artist = item.text(0)
 		self.current_playlist = []
 
-		# Collect all songs by this artist
-		if genre in self.library and artist in self.library[genre]:
-			for album in self.library[genre][artist].values():
-				self.current_playlist.extend(album)
+		if artist.startswith("All Artists"):
+			if genre.startswith("All Genres"):
+				for g in self.library:
+					for a in self.library[g]:
+						for alb in self.library[g][a]:
+							self.current_playlist.extend(self.library[g][a][alb])
+			elif genre in self.library:
+				for a in self.library[genre]:
+					for alb in self.library[genre][a]:
+						self.current_playlist.extend(self.library[genre][a][alb])
+		else:
+			# Collect all songs by this artist
+			if genre.startswith("All Genres"):
+				for g in self.library:
+					if artist in self.library[g]:
+						for album in self.library[g][artist].values():
+							self.current_playlist.extend(album)
+			elif genre in self.library and artist in self.library[genre]:
+				for album in self.library[genre][artist].values():
+					self.current_playlist.extend(album)
 
 		if self.current_playlist:
 			# Sort by track number/title
@@ -1417,10 +1434,50 @@ class MusicPlayer(QMainWindow):
 		genre = genre_item.text(0)
 		artist = artist_item.text(0)
 		album = item.text(0)
+		self.current_playlist = []
 
-		if album in self.library[genre][artist]:
-			self.current_playlist = self.library[genre][artist][album].copy()
+		if album.startswith("All Albums"):
+			if genre.startswith("All Genres"):
+				if artist.startswith("All Artists"):
+					for g in self.library:
+						for a in self.library[g]:
+							for alb in self.library[g][a]:
+								self.current_playlist.extend(self.library[g][a][alb])
+				else:
+					for g in self.library:
+						if artist in self.library[g]:
+							for alb in self.library[g][artist]:
+								self.current_playlist.extend(self.library[g][artist][alb])
+			else:
+				if artist.startswith("All Artists"):
+					for a in self.library[genre]:
+						for alb in self.library[genre][a]:
+							self.current_playlist.extend(self.library[genre][a][alb])
+				else:
+					for alb in self.library[genre][artist]:
+						self.current_playlist.extend(self.library[genre][artist][alb])
+		else:
+			# Specific album
+			if genre.startswith("All Genres"):
+				if artist.startswith("All Artists"):
+					for g in self.library:
+						for a in self.library[g]:
+							if album in self.library[g][a]:
+								self.current_playlist.extend(self.library[g][a][album])
+				else:
+					for g in self.library:
+						if artist in self.library[g] and album in self.library[g][artist]:
+							self.current_playlist.extend(self.library[g][artist][album])
+			else:
+				if artist.startswith("All Artists"):
+					for a in self.library[genre]:
+						if album in self.library[genre][a]:
+							self.current_playlist.extend(self.library[genre][a][album])
+				else:
+					if album in self.library[genre][artist]:
+						self.current_playlist.extend(self.library[genre][artist][album])
 
+		if self.current_playlist:
 			# Sort by track number/title
 			self.current_playlist = self.sort_playlist(self.current_playlist)
 
@@ -1555,7 +1612,8 @@ class MusicPlayer(QMainWindow):
 		# Find and select genre
 		for i in range(self.genre_tree.topLevelItemCount()):
 			item = self.genre_tree.topLevelItem(i)
-			if item.text(0) == genre:
+			# Match exact text OR both are "All Genres" (ignoring count)
+			if item.text(0) == genre or (genre.startswith("All Genres") and item.text(0).startswith("All Genres")):
 				self.genre_tree.setCurrentItem(item)
 				self.on_genre_selected(item)
 
@@ -1568,7 +1626,8 @@ class MusicPlayer(QMainWindow):
 	def _restore_artist(self, genre, artist, album):
 		for j in range(self.artist_tree.topLevelItemCount()):
 			artist_item = self.artist_tree.topLevelItem(j)
-			if artist_item.text(0) == artist:
+			# Match exact text OR both are "All Artists" (ignoring count)
+			if artist_item.text(0) == artist or (artist.startswith("All Artists") and artist_item.text(0).startswith("All Artists")):
 				self.artist_tree.setCurrentItem(artist_item)
 				self.on_artist_selected(artist_item)
 
@@ -1581,7 +1640,8 @@ class MusicPlayer(QMainWindow):
 	def _restore_album(self, genre, artist, album):
 		for k in range(self.album_tree.topLevelItemCount()):
 			album_item = self.album_tree.topLevelItem(k)
-			if album_item.text(0) == album:
+			# Match exact text OR both are "All Albums" (ignoring count)
+			if album_item.text(0) == album or (album.startswith("All Albums") and album_item.text(0).startswith("All Albums")):
 				self.album_tree.setCurrentItem(album_item)
 				self.on_album_selected(album_item)
 
