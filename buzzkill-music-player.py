@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
 							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
 							 QStatusBar)
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
 from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
@@ -205,8 +205,6 @@ class MusicPlayer(QMainWindow):
 		self.current_songs = []
 		self.watched_folders = []
 
-		# self.app_dir = Path(__file__).parent.resolve()
-
 		# More robust cross-platform solution
 		try:
 			# Try to get the script's directory
@@ -231,10 +229,7 @@ class MusicPlayer(QMainWindow):
 		self.audio_output = QAudioOutput()
 		self.player.setAudioOutput(self.audio_output)
 
-		# Connect error handling
-		self.player.errorOccurred.connect(self.handle_player_error)
-
-		# Connect error handling and progress updates
+		# Connect player signals
 		self.player.errorOccurred.connect(self.handle_player_error)
 		self.player.positionChanged.connect(self.update_progress)
 		self.player.durationChanged.connect(self.update_duration)
@@ -844,7 +839,7 @@ class MusicPlayer(QMainWindow):
 		if all_songs:
 			self.current_songs = all_songs
 			self.current_playlist = self.sort_playlist(all_songs)
-			
+
 			for i, song_path in enumerate(self.current_playlist):
 				self.song_table.insertRow(i)
 
@@ -859,7 +854,7 @@ class MusicPlayer(QMainWindow):
 							track_num_display = track_num_raw.split('/')[0]
 						else:
 							track_num_display = track_num_raw
-						
+
 						try:
 							track_num_sort = int(track_num_display)
 						except:
@@ -874,7 +869,7 @@ class MusicPlayer(QMainWindow):
 							year_display = year_raw.split('-')[0]
 						else:
 							year_display = year_raw
-						
+
 						try:
 							year_sort = int(year_display)
 						except:
@@ -929,19 +924,19 @@ class MusicPlayer(QMainWindow):
 				track_item = NumericTableWidgetItem(str(track_num_display))
 				track_item.setData(Qt.ItemDataRole.UserRole, track_num_sort)
 				self.song_table.setItem(i, 0, track_item)
-				
+
 				self.song_table.setItem(i, 1, QTableWidgetItem(title))
 				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
 				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
-				
+
 				year_item = NumericTableWidgetItem(str(year_display))
 				year_item.setData(Qt.ItemDataRole.UserRole, year_sort)
 				self.song_table.setItem(i, 4, year_item)
-				
+
 				time_item = NumericTableWidgetItem(time_str)
 				time_item.setData(Qt.ItemDataRole.UserRole, duration)
 				self.song_table.setItem(i, 5, time_item)
-				
+
 				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
 
 				# Store the file path invisibly for playback
@@ -1510,7 +1505,7 @@ class MusicPlayer(QMainWindow):
 							track_num_display = track_num_raw.split('/')[0]
 						else:
 							track_num_display = track_num_raw
-						
+
 						try:
 							track_num_sort = int(track_num_display)
 						except:
@@ -1525,7 +1520,7 @@ class MusicPlayer(QMainWindow):
 							year_display = year_raw.split('-')[0]
 						else:
 							year_display = year_raw
-						
+
 						try:
 							year_sort = int(year_display)
 						except:
@@ -1579,19 +1574,19 @@ class MusicPlayer(QMainWindow):
 				track_item = NumericTableWidgetItem(str(track_num_display))
 				track_item.setData(Qt.ItemDataRole.UserRole, track_num_sort)
 				self.song_table.setItem(i, 0, track_item)
-				
+
 				self.song_table.setItem(i, 1, QTableWidgetItem(title))
 				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
 				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
-				
+
 				year_item = NumericTableWidgetItem(str(year_display))
 				year_item.setData(Qt.ItemDataRole.UserRole, year_sort)
 				self.song_table.setItem(i, 4, year_item)
-				
+
 				time_item = NumericTableWidgetItem(time_str)
 				time_item.setData(Qt.ItemDataRole.UserRole, duration)
 				self.song_table.setItem(i, 5, time_item)
-				
+
 				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
 
 				# Store the file path invisibly for playback
@@ -2184,10 +2179,25 @@ if __name__ == '__main__':
 
 	app = QApplication(sys.argv)
 
-	# Set application-wide font size
-	font = app.font()
-	font.setPointSize(11)
-	app.setFont(font)
+	# Load and set default font
+	font_path = Path(__file__).parent.resolve() / 'fonts' / 'SauceCodeProNerdFont-Regular.ttf'
+	font_id = QFontDatabase.addApplicationFont(str(font_path))
+	
+	if font_id != -1:
+		font_families = QFontDatabase.applicationFontFamilies(font_id)
+		if font_families:
+			font = QFont(font_families[0], 11)
+			app.setFont(font)
+		else:
+			# Fallback if font loaded but family not found
+			font = app.font()
+			font.setPointSize(11)
+			app.setFont(font)
+	else:
+		print(f"Warning: Could not load font from {font_path}")
+		font = app.font()
+		font.setPointSize(11)
+		app.setFont(font)
 
 	player = MusicPlayer()
 
