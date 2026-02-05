@@ -266,6 +266,7 @@ class MusicPlayer(QMainWindow):
 		self.rounded_buttons = True
 		self.accent_color = "#1976d2"
 		self.show_album_art = False
+		self.is_restoring = False
 
 		self.init_ui()
 		self.load_library()
@@ -716,7 +717,7 @@ class MusicPlayer(QMainWindow):
 							elif s == full_path: # Handle old format
 								exists = True
 								break
-						
+
 						if not exists:
 							self.library[genre][artist][album].append(song_data)
 
@@ -915,7 +916,7 @@ class MusicPlayer(QMainWindow):
 					self.now_playing_text.setText(f"{artist} - {title}")
 					found_metadata = True
 					break
-			
+
 			if not found_metadata:
 				from mutagen import File
 				try:
@@ -1011,7 +1012,7 @@ class MusicPlayer(QMainWindow):
 		current_song_row = self.song_table.currentRow()
 		selected_song_path = None
 		if current_song_row >= 0:
-			selected_song_path = self.song_table.item(current_song_row, 0).data(Qt.ItemDataRole.UserRole)
+			selected_song_path = self.song_table.item(current_song_row, 0).data(Qt.ItemDataRole.UserRole + 1)
 
 		settings = {
 			'column_widths': [
@@ -1223,7 +1224,7 @@ class MusicPlayer(QMainWindow):
 			sel_song = None
 			curr_row = self.song_table.currentRow()
 			if curr_row >= 0:
-				sel_song = self.song_table.item(curr_row, 0).data(Qt.ItemDataRole.UserRole)
+				sel_song = self.song_table.item(curr_row, 0).data(Qt.ItemDataRole.UserRole + 1)
 
 			self.library = new_library
 			self.populate_genre_tree()
@@ -1292,6 +1293,9 @@ class MusicPlayer(QMainWindow):
 		from PyQt6.QtMultimedia import QMediaPlayer
 
 		if status == QMediaPlayer.MediaStatus.EndOfMedia:
+			if self.is_restoring:
+				return
+
 			if self.repeat_song:
 				# Replay current song
 				self.player.setPosition(0)
@@ -1512,12 +1516,15 @@ class MusicPlayer(QMainWindow):
 				# Populate columns
 				track_item = NumericTableWidgetItem(str(track_num_display))
 				track_item.setData(Qt.ItemDataRole.UserRole, track_num_sort)
+				# Store path in UserRole+1 of the first column for internal use
+				track_item.setData(Qt.ItemDataRole.UserRole + 1, song_path)
 				self.song_table.setItem(i, 0, track_item)
 
 				title_item = QTableWidgetItem(title)
-				title_item.setData(Qt.ItemDataRole.UserRole, song_path) # Store path for playback
+				# Also store in title column for redundancy if needed
+				title_item.setData(Qt.ItemDataRole.UserRole + 1, song_path)
 				self.song_table.setItem(i, 1, title_item)
-				
+
 				self.song_table.setItem(i, 2, QTableWidgetItem(artist_name))
 				self.song_table.setItem(i, 3, QTableWidgetItem(album_name))
 
@@ -1530,12 +1537,6 @@ class MusicPlayer(QMainWindow):
 				self.song_table.setItem(i, 5, time_item)
 
 				self.song_table.setItem(i, 6, QTableWidgetItem(genre_name))
-				
-				# CRITICAL: Store path in UserRole+1 of the first column for double-click access
-				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole + 1, song_path)
-
-				# Store the file path invisibly for playback
-				self.song_table.item(i, 0).setData(Qt.ItemDataRole.UserRole + 1, song_path)
 
 			self.song_table.setSortingEnabled(True)
 
@@ -1592,9 +1593,12 @@ class MusicPlayer(QMainWindow):
 				break
 
 	def _restore_song(self, song_path):
+		# Handle both dict and string paths
+		target_path = song_path['path'] if isinstance(song_path, dict) else song_path
+
 		for row in range(self.song_table.rowCount()):
-			current_song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-			if current_song_path == song_path:
+			current_song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
+			if current_song_path == target_path:
 				self.song_table.selectRow(row)
 				break
 
@@ -2042,31 +2046,33 @@ class MusicPlayer(QMainWindow):
 			self.album_art_label.setText("Error loading art")
 
 	def restore_playback_position(self):
-		#print(f"DEBUG - Remember position enabled: {self.remember_position}")
-		#print(f"DEBUG - Position file exists: {self.playback_position_file.exists()}")
-
 		if not self.remember_position or not self.playback_position_file.exists():
 			return
+
+		# If we already have a playlist (from restore_selection), we might just want to seek
+		# but if we're restoring the WHOLE state from playback_position.json, we do it here.
 
 		try:
 			with open(self.playback_position_file, 'r') as f:
 				position_data = json.load(f)
 
-			print(f"DEBUG - Loaded position data: {position_data.get('song_path')}, position: {position_data.get('position')}")
-
-			song_path = position_data.get('song_path')
+			song_data = position_data.get('song_path')
 			position = position_data.get('position', 0)
 			playlist = position_data.get('playlist', [])
 			track_index = position_data.get('track_index', 0)
 
-			# Verify the song still exists
-			if song_path and Path(song_path).exists():
-				print(f"DEBUG - Song exists, restoring...")
-				self.current_playlist = playlist
-				self.current_track_index = track_index
+			# Extract actual path if it's stored as a dict or string
+			actual_path = song_data['path'] if isinstance(song_data, dict) else song_data
 
-				# Populate the song table with the playlist
-				self.populate_song_table_from_playlist()
+			# Verify the song still exists
+			if actual_path and Path(actual_path).exists():
+				# If we don't have a playlist yet, or it's different, restore it
+				if not self.current_playlist or len(self.current_playlist) != len(playlist):
+					self.current_playlist = playlist
+					self.current_track_index = track_index
+					self.populate_song_table_from_playlist()
+
+				self.highlight_current_song()
 
 				# Store the position to restore after media loads
 				self._pending_seek_position = position
@@ -2075,38 +2081,58 @@ class MusicPlayer(QMainWindow):
 				def on_media_loaded(status):
 					from PyQt6.QtMultimedia import QMediaPlayer
 					if status == QMediaPlayer.MediaStatus.LoadedMedia and hasattr(self, '_pending_seek_position'):
-						print(f"DEBUG - Media loaded, seeking to {self._pending_seek_position}ms")
-						self.player.setPosition(self._pending_seek_position)
-						delattr(self, '_pending_seek_position')
+						# Delay seek slightly to ensure player is ready
+						from PyQt6.QtCore import QTimer
+						QTimer.singleShot(100, lambda: self._finish_restore())
 						# Disconnect this handler
 						self.player.mediaStatusChanged.disconnect(on_media_loaded)
 
 				self.player.mediaStatusChanged.connect(on_media_loaded)
 
 				# Load the song
-				self.player.setSource(QUrl.fromLocalFile(song_path))
+				self.is_restoring = True
+				self.player.setSource(QUrl.fromLocalFile(actual_path))
 
-				# Update UI
-				from mutagen import File
-				try:
-					audio = File(song_path, easy=True)
-					if audio:
-						artist = audio.get('artist', ['Unknown Artist'])[0]
-						title = audio.get('title', [Path(song_path).stem])[0]
+				# Update UI Now Playing
+				found_metadata = False
+				for song in self.current_playlist:
+					s_path = song['path'] if isinstance(song, dict) else song
+					if s_path == actual_path:
+						artist = song.get('artist', 'Unknown Artist') if isinstance(song, dict) else 'Unknown Artist'
+						title = song.get('title', Path(actual_path).stem) if isinstance(song, dict) else Path(actual_path).stem
 						self.now_playing_text.setText(f"{artist} - {title}")
-					else:
-						self.now_playing_text.setText(f"{Path(song_path).stem}")
-				except:
-					self.now_playing_text.setText(f"{Path(song_path).stem}")
+						found_metadata = True
+						break
 
-				print(f"Restored playback position: {position/1000:.1f}s")
+				if not found_metadata:
+					self.now_playing_text.setText(Path(actual_path).stem)
+
+				if self.show_album_art:
+					self.update_album_art()
+
+				print(f"Restoring playback position: {position/1000:.1f}s")
 			else:
-				print(f"DEBUG - Song path doesn't exist: {song_path}")
+				print(f"DEBUG - Song path doesn't exist or is empty: {actual_path}")
 
 		except Exception as e:
+			self.is_restoring = False
 			print(f"Error restoring playback position: {e}")
 			import traceback
 			traceback.print_exc()
+
+	def _finish_restore(self):
+		if hasattr(self, '_pending_seek_position'):
+			print(f"Seeking to {self._pending_seek_position}ms")
+			self.player.setPosition(self._pending_seek_position)
+			delattr(self, '_pending_seek_position')
+
+		# Give it a moment before allowing normal status changes to process EndOfMedia
+		from PyQt6.QtCore import QTimer
+		QTimer.singleShot(500, self._clear_restoring_flag)
+
+	def _clear_restoring_flag(self):
+		self.is_restoring = False
+		print("Restoration complete")
 
 if __name__ == '__main__':
 	# Windows-specific: Set App User Model ID for custom taskbar icon
@@ -2125,21 +2151,21 @@ if __name__ == '__main__':
 	# Load and set default font
 	font_path = Path(__file__).parent.resolve() / 'fonts' / 'SauceCodeProNerdFont-Regular.ttf'
 	font_id = QFontDatabase.addApplicationFont(str(font_path))
-	
+
 	if font_id != -1:
 		font_families = QFontDatabase.applicationFontFamilies(font_id)
 		if font_families:
-			font = QFont(font_families[0], 11)
+			font = QFont(font_families[0], 10)
 			app.setFont(font)
 		else:
 			# Fallback if font loaded but family not found
 			font = app.font()
-			font.setPointSize(11)
+			font.setPointSize(10)
 			app.setFont(font)
 	else:
 		print(f"Warning: Could not load font from {font_path}")
 		font = app.font()
-		font.setPointSize(11)
+		font.setPointSize(10)
 		app.setFont(font)
 
 	player = MusicPlayer()
