@@ -12,15 +12,16 @@ Buzzkill is a poor MusicBee alternative for ***Linux*** (and ***Windows*** if, f
 
 
 ## Setup
-Clone or download the project, then open terminal in the project folder (the folder containing buzzkill-music-player.py).
+Clone/Download this repo. Open terminal in the project folder (the folder containing buzzkill-music-player.py).
 
-You should see:
+You should see (but not limited to):
 ```
 buzzkill-music-player.py
+fonts/
 icons/
-requirements.txt
 launch-linux.sh
 launch-windows.bat
+requirements.txt
 ```
 
 
