@@ -12,15 +12,16 @@ Buzzkill is a poor MusicBee alternative for ***Linux*** (and ***Windows*** if, f
 
 
 ## Setup
-Clone or download the project, then open terminal in the project folder (the folder containing buzzkill-music-player.py).
+Clone/Download this repo. Open terminal in the project folder (the folder containing buzzkill-music-player.py).
 
-You should see:
+You should see (but not limited to):
 ```
 buzzkill-music-player.py
+fonts/
 icons/
-requirements.txt
 launch-linux.sh
 launch-windows.bat
+requirements.txt
 ```
 
 
@@ -43,9 +44,7 @@ Close the terminal and run **launch-windows.bat**
 
 
 ## Instructions
-- On first launch, click the folder icon in the top-left to choose your music library folder (example: C:\Users\CoolGuy\Music). *Note: The app only supports one folder at this time.*
-
-- The Bookmark button tells the app to remember the playback position of your music. When enabled, you can close the app and maintain playback position the next time you launch the app.
+- On first launch, click the folder icon in the top-left to choose what folders you want to be included in the music library (example: /home/CoolGuy/Music/ or C:\Users\CoolGuy\Music). 
 
 
 ## Troubleshooting

@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QHBoxLayout, QPushButton, QTreeWidget, QTreeWidgetItem,
 							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
 							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
-							 QStatusBar)
+							 QStatusBar, QListWidget, QListWidgetItem)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
 from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -171,6 +171,61 @@ class ColorPickerDialog(QDialog):
 
 	def get_color(self):
 		return self.color.name()
+
+class LibraryFoldersDialog(QDialog):
+	def __init__(self, watched_folders, parent=None):
+		super().__init__(parent)
+		self.setWindowTitle("Manage Music Folders")
+		self.resize(500, 350)
+		self.watched_folders = list(watched_folders) # Copy
+
+		layout = QVBoxLayout(self)
+
+		label = QLabel("Folders included in your music library:")
+		layout.addWidget(label)
+
+		self.list_widget = QListWidget()
+		for folder in self.watched_folders:
+			self.list_widget.addItem(folder)
+		layout.addWidget(self.list_widget)
+
+		btn_layout = QHBoxLayout()
+		add_btn = QPushButton("Add Folder")
+		add_btn.clicked.connect(self.add_folder)
+		remove_btn = QPushButton("Remove Selected")
+		remove_btn.clicked.connect(self.remove_folder)
+		
+		btn_layout.addWidget(add_btn)
+		btn_layout.addWidget(remove_btn)
+		layout.addLayout(btn_layout)
+
+		# Standard dialog buttons
+		buttons = QHBoxLayout()
+		ok_btn = QPushButton("Save & Rescan")
+		ok_btn.clicked.connect(self.accept)
+		cancel_btn = QPushButton("Cancel")
+		cancel_btn.clicked.connect(self.reject)
+		buttons.addStretch()
+		buttons.addWidget(ok_btn)
+		buttons.addWidget(cancel_btn)
+		layout.addLayout(buttons)
+
+	def add_folder(self):
+		folder = QFileDialog.getExistingDirectory(self, "Select Music Folder")
+		if folder and folder not in self.watched_folders:
+			self.watched_folders.append(folder)
+			self.list_widget.addItem(folder)
+
+	def remove_folder(self):
+		current_item = self.list_widget.currentItem()
+		if current_item:
+			folder = current_item.text()
+			if folder in self.watched_folders:
+				self.watched_folders.remove(folder)
+			self.list_widget.takeItem(self.list_widget.row(current_item))
+
+	def get_folders(self):
+		return self.watched_folders
 
 class ScalableLabel(QLabel):
 	def __init__(self, parent=None):
@@ -618,12 +673,10 @@ class MusicPlayer(QMainWindow):
 		self.statusBar().showMessage("Ready")
 
 	def add_folder(self):
-		folder = QFileDialog.getExistingDirectory(self, "Select Music Folder")
-		if folder:
-			if folder not in self.watched_folders:
-				self.watched_folders.append(folder)
-
-			# Trigger a background rescan which will also update the status bar
+		dialog = LibraryFoldersDialog(self.watched_folders, self)
+		if dialog.exec():
+			self.watched_folders = dialog.get_folders()
+			self.save_library()
 			self.rescan_library()
 
 	def load_library(self):
