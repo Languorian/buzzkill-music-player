@@ -2043,7 +2043,7 @@ class MusicPlayer(QMainWindow):
 		except Exception as e:
 			print(f"Error loading album art: {e}")
 			self.album_art_label.clear()
-			self.album_art_label.setText("Error loading art")
+			self.album_art_label.setText("Missing Album Art")
 
 	def restore_playback_position(self):
 		if not self.remember_position or not self.playback_position_file.exists():

@@ -2,3 +2,6 @@ venv/
 __pycache__/
 *.pyc
 config/
+build/
+dist/
+Buzzkill.spec
