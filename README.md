@@ -43,9 +43,7 @@ Close the terminal and run **launch-windows.bat**
 
 
 ## Instructions
-- On first launch, click the folder icon in the top-left to choose your music library folder (example: C:\Users\CoolGuy\Music). *Note: The app only supports one folder at this time.*
-
-- The Bookmark button tells the app to remember the playback position of your music. When enabled, you can close the app and maintain playback position the next time you launch the app.
+- On first launch, click the folder icon in the top-left to choose what folders you want to be included in the music library (example: /home/CoolGuy/Music/ or C:\Users\CoolGuy\Music). 
 
 
 ## Troubleshooting
