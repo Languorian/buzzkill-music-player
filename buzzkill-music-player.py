@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QHBoxLayout, QPushButton, QTreeWidget, QTreeWidgetItem,
 							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
 							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
-							 QStatusBar, QListWidget, QListWidgetItem)
+							 QStatusBar, QListWidget, QListWidgetItem, QMenu)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
 from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -260,6 +260,198 @@ class NumericTableWidgetItem(QTableWidgetItem):
 			if data is not None and other_data is not None:
 				return data < other_data
 		return super().__lt__(other)
+
+class EditMetadataDialog(QDialog):
+	def __init__(self, song_path, parent=None):
+		super().__init__(parent)
+		self.song_path = song_path
+		self.setWindowTitle("Edit Metadata")
+		self.setFixedWidth(500)
+		
+		self.new_artwork_data = None
+		self.mime_type = "image/jpeg"
+		
+		from mutagen import File
+		try:
+			self.audio = File(song_path, easy=True)
+			if self.audio is None:
+				# Try without easy=True if easy failed to even return an object
+				self.audio = File(song_path)
+		except Exception as e:
+			print(f"Error loading metadata for editing: {e}")
+			self.audio = None
+
+		layout = QVBoxLayout(self)
+		
+		# Metadata fields
+		form_layout = QGridLayout()
+		self.fields = {}
+		
+		metadata_keys = [
+			("Title", "title"),
+			("Artist", "artist"),
+			("Album", "album"),
+			("Year", "date"),
+			("Track #", "tracknumber"),
+			("Genre", "genre")
+		]
+		
+		for i, (label_text, key) in enumerate(metadata_keys):
+			form_layout.addWidget(QLabel(label_text), i, 0)
+			line_edit = QLineEdit()
+			if self.audio and key in self.audio:
+				val = self.audio[key][0] if isinstance(self.audio[key], list) and self.audio[key] else str(self.audio[key])
+				line_edit.setText(val)
+			form_layout.addWidget(line_edit, i, 1)
+			self.fields[key] = line_edit
+			
+		layout.addLayout(form_layout)
+		
+		# Album Art Section
+		art_group = QHBoxLayout()
+		
+		self.art_label = QLabel()
+		self.art_label.setFixedSize(120, 120)
+		self.art_label.setScaledContents(True)
+		self.art_label.setStyleSheet("border: 1px solid #555; background-color: #222;")
+		self.art_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+		
+		self.load_current_art()
+		art_group.addWidget(self.art_label)
+		
+		art_btn_layout = QVBoxLayout()
+		change_art_btn = QPushButton("Change Album Art")
+		change_art_btn.clicked.connect(self.change_art)
+		art_btn_layout.addWidget(change_art_btn)
+		art_btn_layout.addStretch()
+		art_group.addLayout(art_btn_layout)
+		
+		layout.addLayout(art_group)
+		
+		# Buttons
+		btn_layout = QHBoxLayout()
+		btn_layout.addStretch()
+		save_btn = QPushButton("Save Changes")
+		save_btn.clicked.connect(self.save_metadata)
+		save_btn.setStyleSheet("padding: 5px 15px; font-weight: bold;")
+		cancel_btn = QPushButton("Cancel")
+		cancel_btn.clicked.connect(self.reject)
+		btn_layout.addWidget(save_btn)
+		btn_layout.addWidget(cancel_btn)
+		layout.addLayout(btn_layout)
+
+	def load_current_art(self):
+		from mutagen import File
+		try:
+			audio = File(self.song_path)
+			artwork = None
+			if audio:
+				# Handle different tag formats
+				if hasattr(audio, 'tags') and audio.tags:
+					# Try APIC for ID3
+					for key in audio.tags.keys():
+						if key.startswith('APIC'):
+							artwork = audio.tags[key].data
+							break
+				
+				if not artwork and 'APIC:' in audio:  # Fallback
+					artwork = audio['APIC:'].data
+				elif not artwork and hasattr(audio, 'pictures') and audio.pictures:  # FLAC
+					artwork = audio.pictures[0].data
+				elif not artwork and 'covr' in audio:  # MP4
+					artwork = audio['covr'][0]
+
+			if artwork:
+				pixmap = QPixmap()
+				pixmap.loadFromData(artwork)
+				self.art_label.setPixmap(pixmap)
+			else:
+				self.art_label.setText("No Art")
+		except Exception as e:
+			print(f"Error loading art in dialog: {e}")
+			self.art_label.setText("Error")
+
+	def change_art(self):
+		file_path, _ = QFileDialog.getOpenFileName(
+			self, "Select Album Art", "", "Images (*.jpg *.jpeg *.png *.bmp)"
+		)
+		if file_path:
+			try:
+				with open(file_path, 'rb') as f:
+					self.new_artwork_data = f.read()
+				
+				# Simple mime detection
+				ext = Path(file_path).suffix.lower()
+				if ext in ['.jpg', '.jpeg']:
+					self.mime_type = "image/jpeg"
+				elif ext == '.png':
+					self.mime_type = "image/png"
+				elif ext == '.bmp':
+					self.mime_type = "image/bmp"
+					
+				pixmap = QPixmap()
+				pixmap.loadFromData(self.new_artwork_data)
+				self.art_label.setPixmap(pixmap)
+			except Exception as e:
+				from PyQt6.QtWidgets import QMessageBox
+				QMessageBox.warning(self, "Error", f"Could not load image: {e}")
+
+	def save_metadata(self):
+		from mutagen import File
+		try:
+			# Save text metadata
+			audio = File(self.song_path, easy=True)
+			if audio is not None:
+				for key, line_edit in self.fields.items():
+					audio[key] = [line_edit.text()]
+				audio.save()
+			
+			# Save artwork if changed
+			if self.new_artwork_data:
+				ext = Path(self.song_path).suffix.lower()
+				if ext == '.mp3':
+					from mutagen.id3 import ID3, APIC
+					try:
+						tags = ID3(self.song_path)
+					except:
+						tags = ID3()
+						
+					# Clear existing APIC tags
+					keys_to_delete = [k for k in tags.keys() if k.startswith('APIC')]
+					for k in keys_to_delete:
+						del tags[k]
+						
+					tags.add(APIC(
+						encoding=3,
+						mime=self.mime_type,
+						type=3,
+						desc=u'Cover',
+						data=self.new_artwork_data
+					))
+					tags.save(self.song_path)
+				elif ext == '.flac':
+					from mutagen.flac import Picture, FLAC
+					audio = FLAC(self.song_path)
+					picture = Picture()
+					picture.data = self.new_artwork_data
+					picture.type = 3
+					picture.mime = self.mime_type
+					# Remove existing pictures
+					audio.clear_pictures()
+					audio.add_picture(picture)
+					audio.save()
+				elif ext in ['.m4a', '.mp4']:
+					from mutagen.mp4 import MP4, MP4Cover
+					audio = MP4(self.song_path)
+					fmt = MP4Cover.FORMAT_JPEG if self.mime_type == "image/jpeg" else MP4Cover.FORMAT_PNG
+					audio['covr'] = [MP4Cover(self.new_artwork_data, imageformat=fmt)]
+					audio.save()
+				# Add more formats as needed if required
+			
+			self.accept()
+		except Exception as e:
+			from PyQt6.QtWidgets import QMessageBox
+			QMessageBox.critical(self, "Error", f"Failed to save metadata: {e}")
 
 class MusicPlayer(QMainWindow):
 	def __init__(self):
@@ -655,6 +847,8 @@ class MusicPlayer(QMainWindow):
 		self.song_table.setColumnCount(7)
 		self.song_table.setHorizontalHeaderLabels(["Track #", "Title", "Artist", "Album", "Year", "Time", "Genre"])
 		self.song_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+		self.song_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+		self.song_table.customContextMenuRequested.connect(self.show_context_menu)
 		self.song_table.setSortingEnabled(True)
 		self.song_table.verticalHeader().setVisible(False)  # Remove row numbers
 		self.song_table.itemDoubleClicked.connect(self.on_song_double_clicked)
@@ -950,6 +1144,39 @@ class MusicPlayer(QMainWindow):
 
 		self.current_track_index = row
 		self.play_song(song_path)
+
+	def show_context_menu(self, position):
+		item = self.song_table.itemAt(position)
+		if not item:
+			return
+			
+		menu = QMenu(self)
+		edit_action = menu.addAction("Edit Metadata")
+		
+		action = menu.exec(self.song_table.viewport().mapToGlobal(position))
+		
+		if action == edit_action:
+			self.open_edit_metadata_dialog(item.row())
+
+	def open_edit_metadata_dialog(self, row):
+		# Path is stored in UserRole+1 of the first column
+		song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
+		
+		if not song_path or not os.path.exists(song_path):
+			self.statusBar().showMessage("Error: Song file not found.")
+			return
+			
+		dialog = EditMetadataDialog(song_path, self)
+		if dialog.exec():
+			# Refresh the library and UI
+			self.statusBar().showMessage("Metadata saved. Refreshing library...")
+			
+			# If the edited song is the one currently playing, refresh the album art
+			current_source = self.player.source().toLocalFile()
+			if current_source == song_path:
+				self.update_album_art()
+				
+			self.rescan_library()
 
 	def play_song(self, file_path):
 			icon_color = 'white' if self.dark_mode else 'black'
@@ -2079,11 +2306,18 @@ class MusicPlayer(QMainWindow):
 
 			if audio:
 				# Handle different tag formats
-				if 'APIC:' in audio: # ID3 (MP3)
+				if hasattr(audio, 'tags') and audio.tags:
+					# Try APIC for ID3
+					for key in audio.tags.keys():
+						if key.startswith('APIC'):
+							artwork = audio.tags[key].data
+							break
+
+				if not artwork and 'APIC:' in audio: # ID3 (MP3) fallback
 					artwork = audio['APIC:'].data
-				elif audio.pictures: # FLAC
+				elif not artwork and audio.pictures: # FLAC
 					artwork = audio.pictures[0].data
-				elif 'covr' in audio: # MP4/M4A
+				elif not artwork and 'covr' in audio: # MP4/M4A
 					artwork = audio['covr'][0]
 
 			if artwork:
