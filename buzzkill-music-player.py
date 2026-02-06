@@ -246,6 +246,14 @@ class ScalableLabel(QLabel):
 		else:
 			super().setPixmap(QPixmap())
 
+	def clear(self):
+		self._original_pixmap = None
+		super().clear()
+
+	def setText(self, text):
+		self._original_pixmap = None
+		super().setText(text)
+
 	def resizeEvent(self, event):
 		if self._original_pixmap and not self._original_pixmap.isNull():
 			scaled = self._original_pixmap.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
