@@ -853,6 +853,7 @@ class MusicPlayer(QMainWindow):
 		self.song_table.setColumnCount(7)
 		self.song_table.setHorizontalHeaderLabels(["#", "Title", "Artist", "Album", "Year", "Time", "Genre"])
 		self.song_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+		self.song_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
 		self.song_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 		self.song_table.customContextMenuRequested.connect(self.show_context_menu)
 		self.song_table.setSortingEnabled(True)
@@ -2055,6 +2056,7 @@ class MusicPlayer(QMainWindow):
 			}}
 			QTableWidget::item:selected {{
 				background-color: {selection_bg};
+				outline: none;
 			}}
 			QHeaderView::section {{
 				background-color: {bg_color};
