@@ -1886,17 +1886,25 @@ class MusicPlayer(QMainWindow):
 
 		# Save playback position if feature is enabled
 		if self.remember_position and self.current_playlist and self.current_track_index < len(self.current_playlist):
-			position_data = {
-				'song_path': self.current_playlist[self.current_track_index],
-				'position': self.player.position(),
-				'playlist': self.current_playlist,
-				'track_index': self.current_track_index
-			}
-			try:
-				with open(self.playback_position_file, 'w') as f:
-					json.dump(position_data, f, indent=2)
-			except Exception as e:
-				print(f"Error saving playback position: {e}")
+			# Only save if there's actually a song loaded that matches our current track index.
+			# This prevents saving a "stale" or never-played song when just browsing the library.
+			current_source = self.player.source().toLocalFile()
+			if current_source:
+				song = self.current_playlist[self.current_track_index]
+				song_path = song['path'] if isinstance(song, dict) else song
+				
+				if os.path.normpath(current_source) == os.path.normpath(song_path):
+					position_data = {
+						'song_path': song,
+						'position': self.player.position(),
+						'playlist': self.current_playlist,
+						'track_index': self.current_track_index
+					}
+					try:
+						with open(self.playback_position_file, 'w') as f:
+							json.dump(position_data, f, indent=2)
+					except Exception as e:
+						print(f"Error saving playback position: {e}")
 
 		event.accept()
 
