@@ -549,6 +549,7 @@ class MusicPlayer(QMainWindow):
 		self.apply_theme()
 
 		layout = QVBoxLayout(main_widget)
+		layout.addSpacing(10)
 
 		#==============================================
 		#==============     ROW 1    ==================
