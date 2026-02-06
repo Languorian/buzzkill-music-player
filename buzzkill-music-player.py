@@ -208,7 +208,7 @@ class LibraryFoldersDialog(QDialog):
 
 		# Standard dialog buttons
 		buttons = QHBoxLayout()
-		ok_btn = QPushButton("Save & Rescan")
+		ok_btn = QPushButton("Save and Rescan")
 		ok_btn.clicked.connect(self.accept)
 		cancel_btn = QPushButton("Cancel")
 		cancel_btn.clicked.connect(self.reject)
@@ -1892,7 +1892,7 @@ class MusicPlayer(QMainWindow):
 			if current_source:
 				song = self.current_playlist[self.current_track_index]
 				song_path = song['path'] if isinstance(song, dict) else song
-				
+
 				if os.path.normpath(current_source) == os.path.normpath(song_path):
 					position_data = {
 						'song_path': song,

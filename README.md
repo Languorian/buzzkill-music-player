@@ -43,10 +43,6 @@ pip install -r requirements.txt
 Close the terminal and run **launch-windows.bat**
 
 
-## Instructions
-- On first launch, click the folder icon in the top-left to choose what folders you want to be included in the music library (example: /home/CoolGuy/Music/ or C:\Users\CoolGuy\Music). 
-
-
 ## Troubleshooting
 If Linux users get an error when running the venv command, you *may* need to install python3-venv:
 ```
