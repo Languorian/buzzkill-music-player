@@ -201,7 +201,7 @@ class LibraryFoldersDialog(QDialog):
 		add_btn.clicked.connect(self.add_folder)
 		remove_btn = QPushButton("Remove Selected")
 		remove_btn.clicked.connect(self.remove_folder)
-		
+
 		btn_layout.addWidget(add_btn)
 		btn_layout.addWidget(remove_btn)
 		layout.addLayout(btn_layout)
@@ -282,10 +282,10 @@ class EditMetadataDialog(QDialog):
 		self.song_path = song_path
 		self.setWindowTitle("Edit Metadata")
 		self.setFixedWidth(500)
-		
+
 		self.new_artwork_data = None
 		self.mime_type = "image/jpeg"
-		
+
 		from mutagen import File
 		try:
 			self.audio = File(song_path, easy=True)
@@ -297,11 +297,11 @@ class EditMetadataDialog(QDialog):
 			self.audio = None
 
 		layout = QVBoxLayout(self)
-		
+
 		# Metadata fields
 		form_layout = QGridLayout()
 		self.fields = {}
-		
+
 		metadata_keys = [
 			("Title", "title"),
 			("Artist", "artist"),
@@ -310,7 +310,7 @@ class EditMetadataDialog(QDialog):
 			("Track #", "tracknumber"),
 			("Genre", "genre")
 		]
-		
+
 		for i, (label_text, key) in enumerate(metadata_keys):
 			form_layout.addWidget(QLabel(label_text), i, 0)
 			line_edit = QLineEdit()
@@ -319,30 +319,30 @@ class EditMetadataDialog(QDialog):
 				line_edit.setText(val)
 			form_layout.addWidget(line_edit, i, 1)
 			self.fields[key] = line_edit
-			
+
 		layout.addLayout(form_layout)
-		
+
 		# Album Art Section
 		art_group = QHBoxLayout()
-		
+
 		self.art_label = QLabel()
 		self.art_label.setFixedSize(120, 120)
 		self.art_label.setScaledContents(True)
 		self.art_label.setStyleSheet("border: 1px solid #555; background-color: #222;")
 		self.art_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-		
+
 		self.load_current_art()
 		art_group.addWidget(self.art_label)
-		
+
 		art_btn_layout = QVBoxLayout()
 		change_art_btn = QPushButton("Change Album Art")
 		change_art_btn.clicked.connect(self.change_art)
 		art_btn_layout.addWidget(change_art_btn)
 		art_btn_layout.addStretch()
 		art_group.addLayout(art_btn_layout)
-		
+
 		layout.addLayout(art_group)
-		
+
 		# Buttons
 		btn_layout = QHBoxLayout()
 		btn_layout.addStretch()
@@ -368,7 +368,7 @@ class EditMetadataDialog(QDialog):
 						if key.startswith('APIC'):
 							artwork = audio.tags[key].data
 							break
-				
+
 				if not artwork and 'APIC:' in audio:  # Fallback
 					artwork = audio['APIC:'].data
 				elif not artwork and hasattr(audio, 'pictures') and audio.pictures:  # FLAC
@@ -394,7 +394,7 @@ class EditMetadataDialog(QDialog):
 			try:
 				with open(file_path, 'rb') as f:
 					self.new_artwork_data = f.read()
-				
+
 				# Simple mime detection
 				ext = Path(file_path).suffix.lower()
 				if ext in ['.jpg', '.jpeg']:
@@ -403,7 +403,7 @@ class EditMetadataDialog(QDialog):
 					self.mime_type = "image/png"
 				elif ext == '.bmp':
 					self.mime_type = "image/bmp"
-					
+
 				pixmap = QPixmap()
 				pixmap.loadFromData(self.new_artwork_data)
 				self.art_label.setPixmap(pixmap)
@@ -420,7 +420,7 @@ class EditMetadataDialog(QDialog):
 				for key, line_edit in self.fields.items():
 					audio[key] = [line_edit.text()]
 				audio.save()
-			
+
 			# Save artwork if changed
 			if self.new_artwork_data:
 				ext = Path(self.song_path).suffix.lower()
@@ -430,12 +430,12 @@ class EditMetadataDialog(QDialog):
 						tags = ID3(self.song_path)
 					except:
 						tags = ID3()
-						
+
 					# Clear existing APIC tags
 					keys_to_delete = [k for k in tags.keys() if k.startswith('APIC')]
 					for k in keys_to_delete:
 						del tags[k]
-						
+
 					tags.add(APIC(
 						encoding=3,
 						mime=self.mime_type,
@@ -462,7 +462,7 @@ class EditMetadataDialog(QDialog):
 					audio['covr'] = [MP4Cover(self.new_artwork_data, imageformat=fmt)]
 					audio.save()
 				# Add more formats as needed if required
-			
+
 			self.accept()
 		except Exception as e:
 			from PyQt6.QtWidgets import QMessageBox
@@ -518,7 +518,7 @@ class MusicPlayer(QMainWindow):
 		self.current_playlist = []  # Tracks for current selection
 		self.current_track_index = 0
 		self.dark_mode = True
-		self.icon_size = QSize(24, 24)
+		self.icon_size = QSize(16, 16)
 		self.is_muted = False
 		self.volume_before_mute = 50
 		self.repeat_mode = 0	# 0=off, 1=song, 2=album
@@ -655,7 +655,18 @@ class MusicPlayer(QMainWindow):
 
 		center_controls = QHBoxLayout(center_container)
 		center_controls.setContentsMargins(0, 0, 0, 0)
+		center_controls.setSpacing(28)
 		center_controls.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+		# Shuffle button
+		self.shuffle_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color, use_style_path=False))
+		self.shuffle_btn.setIconSize(self.icon_size)
+		self.shuffle_btn.setToolTip("Shuffle")
+		self.shuffle_btn.setFlat(True)
+		self.shuffle_btn.clicked.connect(self.toggle_shuffle)
+		center_controls.addWidget(self.shuffle_btn)
 
 		# Previous track button
 		self.prev_btn = QPushButton()
@@ -671,21 +682,21 @@ class MusicPlayer(QMainWindow):
 		self.play_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
 		self.play_btn.setIcon(self.load_icon('play.svg', icon_color, use_style_path=True))
-		self.play_btn.setIconSize(self.icon_size)
+		self.play_btn.setIconSize(QSize(36, 36))
 		self.play_btn.setToolTip("Play/Pause")
 		self.play_btn.setFlat(True)
 		self.play_btn.clicked.connect(self.play_pause)
 		center_controls.addWidget(self.play_btn)
 
 		# Stop button
-		self.stop_btn = QPushButton()
-		icon_color = 'white' if self.dark_mode else 'black'
-		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
-		self.stop_btn.setIconSize(self.icon_size)
-		self.stop_btn.setToolTip("Stop the current playing track")
-		self.stop_btn.setFlat(True)
-		self.stop_btn.clicked.connect(self.stop)
-		center_controls.addWidget(self.stop_btn)
+		# self.stop_btn = QPushButton()
+		# icon_color = 'white' if self.dark_mode else 'black'
+		# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
+		# self.stop_btn.setIconSize(self.icon_size)
+		# self.stop_btn.setToolTip("Stop the current playing track")
+		# self.stop_btn.setFlat(True)
+		# self.stop_btn.clicked.connect(self.stop)
+		# center_controls.addWidget(self.stop_btn)
 
 		# Next track button
 		self.next_btn = QPushButton()
@@ -696,6 +707,16 @@ class MusicPlayer(QMainWindow):
 		self.next_btn.setFlat(True)
 		self.next_btn.clicked.connect(self.next_track)
 		center_controls.addWidget(self.next_btn)
+
+		# Repeat button
+		self.repeat_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color, use_style_path=False))
+		self.repeat_btn.setIconSize(self.icon_size)
+		self.repeat_btn.setToolTip("Repeat/Loop (Off, Song, Album)")
+		self.repeat_btn.setFlat(True)
+		self.repeat_btn.clicked.connect(self.cycle_repeat_mode)
+		center_controls.addWidget(self.repeat_btn)
 
 		# ===========================
 		# 3. RIGHT SECTION
@@ -728,26 +749,6 @@ class MusicPlayer(QMainWindow):
 		self.volume_slider.setFixedWidth(150) # Use FixedWidth to prevent slider from flexing too much
 		self.volume_slider.valueChanged.connect(self.change_volume)
 		right_controls.addWidget(self.volume_slider)
-
-		# Repeat button
-		self.repeat_btn = QPushButton()
-		icon_color = 'white' if self.dark_mode else 'black'
-		self.repeat_btn.setIcon(self.load_icon('repeat-off.svg', icon_color, use_style_path=False))
-		self.repeat_btn.setIconSize(self.icon_size)
-		self.repeat_btn.setToolTip("Repeat/Loop (Off, Song, Album)")
-		self.repeat_btn.setFlat(True)
-		self.repeat_btn.clicked.connect(self.cycle_repeat_mode)
-		right_controls.addWidget(self.repeat_btn)
-
-		# Shuffle button
-		self.shuffle_btn = QPushButton()
-		icon_color = 'white' if self.dark_mode else 'black'
-		self.shuffle_btn.setIcon(self.load_icon('shuffle-off.svg', icon_color, use_style_path=False))
-		self.shuffle_btn.setIconSize(self.icon_size)
-		self.shuffle_btn.setToolTip("Shuffle")
-		self.shuffle_btn.setFlat(True)
-		self.shuffle_btn.clicked.connect(self.toggle_shuffle)
-		right_controls.addWidget(self.shuffle_btn)
 
 		# ===========================
 		# ASSEMBLE GRID
@@ -1166,33 +1167,33 @@ class MusicPlayer(QMainWindow):
 		item = self.song_table.itemAt(position)
 		if not item:
 			return
-			
+
 		menu = QMenu(self)
 		edit_action = menu.addAction("Edit Metadata")
-		
+
 		action = menu.exec(self.song_table.viewport().mapToGlobal(position))
-		
+
 		if action == edit_action:
 			self.open_edit_metadata_dialog(item.row())
 
 	def open_edit_metadata_dialog(self, row):
 		# Path is stored in UserRole+1 of the first column
 		song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
-		
+
 		if not song_path or not os.path.exists(song_path):
 			self.statusBar().showMessage("Error: Song file not found.")
 			return
-			
+
 		dialog = EditMetadataDialog(song_path, self)
 		if dialog.exec():
 			# Refresh the library and UI
 			self.statusBar().showMessage("Metadata saved. Refreshing library...")
-			
+
 			# If the edited song is the one currently playing, refresh the album art
 			current_source = self.player.source().toLocalFile()
 			if current_source == song_path:
 				self.update_album_art()
-				
+
 			self.rescan_library()
 
 	def play_song(self, file_path):
@@ -1454,7 +1455,7 @@ class MusicPlayer(QMainWindow):
 			self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color, use_style_path=True))
 			self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
 			self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
-			self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
+			# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
 
 			# Update play/pause based on state
 			if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -1988,7 +1989,7 @@ class MusicPlayer(QMainWindow):
 
 		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
 		self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
-		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
+		# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
 
 		# Update play/pause button based on current state
 		if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -2034,7 +2035,7 @@ class MusicPlayer(QMainWindow):
 		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color, use_style_path=True))
 		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color, use_style_path=True))
 		self.next_btn.setIcon(self.load_icon('next.svg', icon_color, use_style_path=True))
-		self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
+		# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color, use_style_path=True))
 
 		# Update play/pause button based on current state
 		if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -2214,7 +2215,7 @@ class MusicPlayer(QMainWindow):
 				new_pos = min(current_pos + scrub_amount, duration)
 			else:
 				new_pos = max(current_pos - scrub_amount, 0)
-			
+
 			self.player.setPosition(new_pos)
 			# Update slider immediately for feedback
 			self.progress_slider.setValue(int((new_pos / duration) * 1000))
