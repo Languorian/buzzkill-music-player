@@ -16,12 +16,19 @@ from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 class ClickableSlider(QSlider):
+	scrolled = pyqtSignal(int)
+
 	def mousePressEvent(self, event):
 		if event.button() == Qt.MouseButton.LeftButton:
 			value = QSlider.minimum(self) + ((QSlider.maximum(self) - QSlider.minimum(self)) * event.position().x()) / self.width()
 			self.setValue(int(value))
 			self.sliderPressed.emit()
 		super().mousePressEvent(event)
+
+	def wheelEvent(self, event):
+		# Emit scrolled signal with the wheel delta
+		self.scrolled.emit(event.angleDelta().y())
+		event.accept()
 
 class LibraryScanner(QThread):
 	finished = pyqtSignal(dict)
@@ -791,6 +798,7 @@ class MusicPlayer(QMainWindow):
 		self.progress_slider.sliderPressed.connect(self.on_progress_slider_pressed)
 		self.progress_slider.sliderReleased.connect(self.on_progress_slider_released)
 		self.progress_slider.sliderMoved.connect(self.on_progress_slider_moved)
+		self.progress_slider.scrolled.connect(self.on_progress_slider_wheeled)
 		packed_layout.addWidget(self.progress_slider)
 
 		self.duration_label = QLabel("0:00")
@@ -2193,6 +2201,22 @@ class MusicPlayer(QMainWindow):
 
 	def on_progress_slider_released(self):
 		self.progress_slider_pressed = False
+
+	def on_progress_slider_wheeled(self, delta):
+		# Scrub 5 seconds per wheel notch
+		scrub_amount = 5000  # 5 seconds in milliseconds
+		current_pos = self.player.position()
+		duration = self.player.duration()
+
+		if duration > 0:
+			if delta > 0:
+				new_pos = min(current_pos + scrub_amount, duration)
+			else:
+				new_pos = max(current_pos - scrub_amount, 0)
+			
+			self.player.setPosition(new_pos)
+			# Update slider immediately for feedback
+			self.progress_slider.setValue(int((new_pos / duration) * 1000))
 
 	def toggle_shuffle(self):
 		import random
