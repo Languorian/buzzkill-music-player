@@ -2044,19 +2044,24 @@ class MusicPlayer(QMainWindow):
 				background-color: {secondary_bg};
 				color: {text_color};
 				border: 1px solid {border_color};
+				outline: 0;
 			}}
 			QTreeWidget::item:selected {{
 				background-color: {selection_bg};
+				outline: none;
+				border: none;
 			}}
 			QTableWidget {{
 				background-color: {secondary_bg};
 				color: {text_color};
 				border: 1px solid {border_color};
 				gridline-color: {border_color};
+				outline: 0;
 			}}
 			QTableWidget::item:selected {{
 				background-color: {selection_bg};
 				outline: none;
+				border: none;
 			}}
 			QHeaderView::section {{
 				background-color: {bg_color};
