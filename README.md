@@ -1,6 +1,6 @@
 # Buzzkill Music Player
 
-Buzzkill is a poor MusicBee alternative for ***Linux*** (and ***Windows*** if, for some reason, you don't want to use MusicBee -- but why?). A lightweight desktop music player built with Python + PyQt6. Browse your library and play audio with a simple interface.
+Buzzkill, a desktop music player built with **Python** and **PyQt6**, is a poor MusicBee alternative for ***Linux*** (and ***Windows*** if, for some reason, you don't want to use MusicBee... but why?). Browse your music library and play audio with a simple interface.
 
 ![Screenshot on Windows 11](screenshots/screenshot-linux-01.jpg)
 
@@ -31,7 +31,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
-Close the terminal and run **launch-linux.sh**
+Close the terminal and run <ins>**launch-linux.sh**</ins>
 
 
 ### Windows
@@ -40,14 +40,7 @@ python -m venv venv
 call venv\Scripts\activate
 pip install -r requirements.txt
 ```
-Close the terminal and run **launch-windows.bat**
-
-
-## Troubleshooting
-If Linux users get an error when running the venv command, you *may* need to install python3-venv:
-```
-sudo apt install python3-venv
-```
+Close the terminal and run <ins>**launch-windows.bat**</ins>
 
 
 ## Special Thanks
