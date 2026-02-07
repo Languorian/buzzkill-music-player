@@ -715,9 +715,17 @@ class MusicPlayer(QMainWindow):
 		right_controls = QHBoxLayout(right_container)
 		right_controls.setContentsMargins(0, 0, 0, 0)
 
-		# KEY FIX: Add a stretch FIRST. This acts as a spring that pushes
-		# all subsequent widgets to the Right, keeping them packed together.
 		right_controls.addStretch()
+
+		# Lyrics button
+		self.lyrics_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.lyrics_btn.setIcon(self.load_icon('lyrics.svg', icon_color))
+		self.lyrics_btn.setIconSize(self.icon_size)
+		self.lyrics_btn.setToolTip("Show lyrics")
+		self.lyrics_btn.setFlat(True)
+		self.lyrics_btn.clicked.connect(self.show_lyrics)
+		right_controls.addWidget(self.lyrics_btn)
 
 		# Volume mute button
 		self.mute_btn = QPushButton()
@@ -1953,6 +1961,51 @@ class MusicPlayer(QMainWindow):
 			self.update_accent_icon()
 			self.apply_theme()
 			self.save_settings()
+
+	def show_lyrics(self):
+		source = self.player.source().toLocalFile()
+		if not source or not os.path.exists(source):
+			self.statusBar().showMessage("No track playing")
+			return
+
+		from mutagen import File
+		try:
+			audio = File(source)
+			if audio is None:
+				return
+
+			lyrics_found = False
+			
+			# Check for different formats
+			ext = Path(source).suffix.lower()
+			
+			if ext == '.mp3':
+				# Check USLT (Unsynchronized lyrics) or SYLT (Synchronized lyrics) in ID3 tags
+				if hasattr(audio, 'tags') and audio.tags:
+					for key in audio.tags.keys():
+						if key.startswith('USLT') or key.startswith('SYLT'):
+							lyrics_found = True
+							break
+			elif ext == '.flac':
+				# FLAC vorbis comments (common tags: 'lyrics', 'unsyncedlyrics', 'unsynced lyrics')
+				for tag in ['lyrics', 'unsyncedlyrics', 'unsynced lyrics']:
+					if audio.get(tag):
+						lyrics_found = True
+						break
+			elif ext in ['.m4a', '.mp4']:
+				# MP4 lyrics tag
+				if audio.get('\xa9lyr'):
+					lyrics_found = True
+			
+			if not lyrics_found:
+				self.statusBar().showMessage("No lyrics found in metadata", 5000)
+			else:
+				# Lyrics found - we'll handle displaying them later
+				pass
+				
+		except Exception as e:
+			print(f"Error checking for lyrics: {e}")
+			self.statusBar().showMessage("Error reading lyrics from metadata")
 
 	def toggle_theme(self):
 		self.dark_mode = not self.dark_mode
