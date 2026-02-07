@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QStatusBar, QListWidget, QListWidgetItem, QMenu,
 							 QStackedWidget, QTextEdit, QGraphicsOpacityEffect)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
-from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QVariantAnimation
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 class ClickableSlider(QSlider):
@@ -2643,22 +2643,45 @@ class MusicPlayer(QMainWindow):
 			self.save_settings()
 
 	def toggle_album_art(self):
-		self.show_album_art = not self.show_album_art
+		if hasattr(self, 'art_anim') and self.art_anim.state() == QVariantAnimation.State.Running:
+			return
 
+		self.show_album_art = not self.show_album_art
+		
+		total_width = self.horizontal_splitter.width()
+		start_sizes = self.horizontal_splitter.sizes()
+		
 		if self.show_album_art:
 			self.album_art_label.show()
 			self.update_album_art()
-			# Equalize 4 columns
-			total_width = self.horizontal_splitter.width()
+			# Target: 4 equal columns
 			equal_width = total_width // 4
-			self.horizontal_splitter.setSizes([equal_width] * 4)
+			end_sizes = [equal_width] * 4
+			easing = QEasingCurve.Type.OutQuad
 		else:
-			self.album_art_label.hide()
-			# Equalize 3 columns
-			total_width = self.horizontal_splitter.width()
+			# Target: 3 equal columns, 4th is 0
 			equal_width = total_width // 3
-			self.horizontal_splitter.setSizes([equal_width, equal_width, equal_width, 0])
+			end_sizes = [equal_width, equal_width, equal_width, 0]
+			easing = QEasingCurve.Type.InQuad
 
+		self.art_anim = QVariantAnimation(self)
+		self.art_anim.setDuration(350)
+		self.art_anim.setStartValue(0.0)
+		self.art_anim.setEndValue(1.0)
+		self.art_anim.setEasingCurve(easing)
+
+		def animate_splitter(progress):
+			current_sizes = []
+			for start, end in zip(start_sizes, end_sizes):
+				current_sizes.append(int(start + (end - start) * progress))
+			self.horizontal_splitter.setSizes(current_sizes)
+
+		self.art_anim.valueChanged.connect(animate_splitter)
+		
+		if not self.show_album_art:
+			self.art_anim.finished.connect(self.album_art_label.hide)
+			
+		self.art_anim.start()
 		self.save_settings()
 
 	def update_album_art(self):
