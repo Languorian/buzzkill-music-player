@@ -469,6 +469,97 @@ class EditMetadataDialog(QDialog):
 			from PyQt6.QtWidgets import QMessageBox
 			QMessageBox.critical(self, "Error", f"Failed to save metadata: {e}")
 
+class SearchDialog(QDialog):
+	def __init__(self, library, parent=None):
+		super().__init__(parent)
+		self.library = library
+		self.setWindowTitle("Search Library")
+		self.setMinimumSize(600, 450)
+
+		layout = QVBoxLayout(self)
+
+		self.search_bar = QLineEdit()
+		self.search_bar.setPlaceholderText("Search for artists, albums, or songs...")
+		self.search_bar.textChanged.connect(self.perform_search)
+		self.search_bar.setMinimumHeight(35)
+		layout.addWidget(self.search_bar)
+
+		self.results_tree = QTreeWidget()
+		self.results_tree.setHeaderLabels(["Result", "Type", "Info"])
+		self.results_tree.setIndentation(20)
+		self.results_tree.setColumnWidth(0, 250)
+		self.results_tree.setColumnWidth(1, 80)
+		layout.addWidget(self.results_tree)
+
+		# Top-level items
+		self.artists_root = QTreeWidgetItem(self.results_tree, ["Artists"])
+		self.albums_root = QTreeWidgetItem(self.results_tree, ["Albums"])
+		self.songs_root = QTreeWidgetItem(self.results_tree, ["Songs"])
+		
+		# Bold the root items
+		root_font = self.results_tree.font()
+		root_font.setBold(True)
+		root_font.setPointSize(root_font.pointSize() + 1)
+		for root in [self.artists_root, self.albums_root, self.songs_root]:
+			root.setFont(0, root_font)
+			root.setFlags(root.flags() & ~Qt.ItemFlag.ItemIsSelectable) # Make roots non-selectable
+
+		self.artists_root.setExpanded(True)
+		self.albums_root.setExpanded(True)
+		self.songs_root.setExpanded(True)
+		
+		# Set focus to search bar
+		self.search_bar.setFocus()
+
+	def perform_search(self, query):
+		# Clear previous results
+		self.artists_root.takeChildren()
+		self.albums_root.takeChildren()
+		self.songs_root.takeChildren()
+
+		if not query or len(query.strip()) < 2:
+			# Hide roots if query too short
+			self.artists_root.setHidden(True)
+			self.albums_root.setHidden(True)
+			self.songs_root.setHidden(True)
+			return
+
+		query = query.lower().strip()
+		
+		found_artists = set()
+		found_albums = set() # (album_name, artist_name)
+		found_songs = [] # list of song dicts
+
+		for genre in self.library:
+			for artist in self.library[genre]:
+				if query in artist.lower():
+					found_artists.add(artist)
+				
+				for album in self.library[genre][artist]:
+					if query in album.lower():
+						found_albums.add((album, artist))
+					
+					for song in self.library[genre][artist][album]:
+						if query in song['title'].lower():
+							found_songs.append(song)
+
+		# Populate Artists
+		for artist in sorted(found_artists):
+			QTreeWidgetItem(self.artists_root, [artist, "Artist", ""])
+
+		# Populate Albums
+		for album, artist in sorted(found_albums):
+			QTreeWidgetItem(self.albums_root, [album, "Album", f"by {artist}"])
+
+		# Populate Songs
+		for song in found_songs:
+			QTreeWidgetItem(self.songs_root, [song['title'], "Song", f"{song['artist']} - {song['album']}"])
+
+		# Show root items only if they have children
+		self.artists_root.setHidden(self.artists_root.childCount() == 0)
+		self.albums_root.setHidden(self.albums_root.childCount() == 0)
+		self.songs_root.setHidden(self.songs_root.childCount() == 0)
+
 class MusicPlayer(QMainWindow):
 	def __init__(self):
 		super().__init__()
@@ -720,6 +811,16 @@ class MusicPlayer(QMainWindow):
 
 		right_controls.addStretch()
 
+		# Search button
+		self.search_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.search_btn.setIcon(self.load_icon('search.svg', icon_color))
+		self.search_btn.setIconSize(self.icon_size)
+		self.search_btn.setToolTip("Search your library")
+		self.search_btn.setFlat(True)
+		self.search_btn.clicked.connect(self.search_library)
+		right_controls.addWidget(self.search_btn)
+
 		# Lyrics button
 		self.lyrics_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
@@ -886,7 +987,7 @@ class MusicPlayer(QMainWindow):
 		self.lyrics_view = QTextEdit()
 		self.lyrics_view.setReadOnly(True)
 		self.lyrics_view.setFrameStyle(0) # No frame
-		
+
 		# Load and set the Propo-Black font for lyrics
 		font_path_black = self.app_dir / 'fonts' / 'SauceCodeProNerdFontPropo-Black.ttf'
 		font_id_black = QFontDatabase.addApplicationFont(str(font_path_black))
@@ -896,7 +997,7 @@ class MusicPlayer(QMainWindow):
 				# Use a larger size for lyrics
 				lyrics_font = QFont(families[0], 18)
 				self.lyrics_view.setFont(lyrics_font)
-		
+
 		self.content_stack.addWidget(self.lyrics_view)
 		layout.addWidget(self.content_stack)
 
@@ -1469,6 +1570,8 @@ class MusicPlayer(QMainWindow):
 			self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color))
 			self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color))
 			self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color))
+			self.lyrics_btn.setIcon(self.load_icon('lyrics.svg', icon_color))
+			self.search_btn.setIcon(self.load_icon('search.svg', icon_color))
 			self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color))
 			self.next_btn.setIcon(self.load_icon('next.svg', icon_color))
 			# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color))
@@ -1580,13 +1683,13 @@ class MusicPlayer(QMainWindow):
 					current_index = i
 				else:
 					break
-			
+
 			if current_index != -1 and current_index != self.last_lyric_index:
 				self.last_lyric_index = current_index
-				
+
 				# Highlight the current line
 				from PyQt6.QtGui import QTextCursor, QTextCharFormat
-				
+
 				# Reset all formatting to inactive color
 				cursor = self.lyrics_view.textCursor()
 				cursor.select(QTextCursor.SelectionType.Document)
@@ -1594,12 +1697,12 @@ class MusicPlayer(QMainWindow):
 				inactive_color = QColor("#555555") if self.dark_mode else QColor("#aaaaaa")
 				format_reset.setForeground(inactive_color)
 				cursor.setCharFormat(format_reset)
-				
+
 				# Apply highlight to current line
 				cursor.movePosition(QTextCursor.MoveOperation.Start)
 				for _ in range(current_index):
 					cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
-				
+
 				cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
 				format_highlight = QTextCharFormat()
 				# Active color: light gray for dark theme, black for light theme
@@ -1607,11 +1710,11 @@ class MusicPlayer(QMainWindow):
 				format_highlight.setForeground(active_color)
 				format_highlight.setFontWeight(QFont.Weight.Bold)
 				cursor.setCharFormat(format_highlight)
-				
+
 				# Ensure visible and center it
 				self.lyrics_view.setTextCursor(cursor)
 				self.lyrics_view.ensureCursorVisible()
-				
+
 				# Clear selection so it doesn't look like user selection
 				cursor.clearSelection()
 				self.lyrics_view.setTextCursor(cursor)
@@ -2047,11 +2150,11 @@ class MusicPlayer(QMainWindow):
 			lyrics_text = None
 			self.sync_lyrics = []
 			self.last_lyric_index = -1
-			
+
 			if audio:
 				# Check for different formats
 				ext = Path(source).suffix.lower()
-				
+
 				if ext == '.mp3':
 					# Check USLT (Unsynchronized lyrics) in ID3 tags
 					if hasattr(audio, 'tags') and audio.tags:
@@ -2080,24 +2183,24 @@ class MusicPlayer(QMainWindow):
 					val = audio.get('\xa9lyr')
 					if val:
 						lyrics_text = val[0]
-			
+
 			# Search for external lyric files if metadata didn't have sync lyrics
 			if not self.sync_lyrics:
 				song_path = Path(source)
 				lrc_path = song_path.with_suffix('.lrc')
 				txt_path = song_path.with_suffix('.txt')
-				
+
 				target_file = None
 				if lrc_path.exists():
 					target_file = lrc_path
 				elif txt_path.exists():
 					target_file = txt_path
-					
+
 				if target_file:
 					try:
 						with open(target_file, 'r', encoding='utf-8', errors='ignore') as f:
 							lyrics_text = f.read()
-							
+
 						# Parse LRC for sync if it's an .lrc file
 						if target_file.suffix.lower() == '.lrc':
 							import re
@@ -2114,16 +2217,16 @@ class MusicPlayer(QMainWindow):
 										msec = int(m[3]) if m[3] else 0
 										if m[3] and len(m[3]) == 2: msec *= 10
 										elif m[3] and len(m[3]) == 1: msec *= 100
-										
+
 										total_ms = (minutes * 60 + seconds) * 1000 + msec
 										self.sync_lyrics.append((total_ms, pure_text))
-							
+
 							if self.sync_lyrics:
 								self.sync_lyrics.sort()
 								lyrics_text = "\n".join([item[1] for item in self.sync_lyrics])
 					except Exception as e:
 						print(f"Error reading external lyric file: {e}")
-			
+
 			if not lyrics_text:
 				self.statusBar().showMessage("No lyrics found in metadata or directory", 5000)
 			else:
@@ -2131,12 +2234,12 @@ class MusicPlayer(QMainWindow):
 				if not self.sync_lyrics:
 					import re
 					lyrics_text = re.sub(r'\[\d{2,}:\d{2}[.:]\d{2,}\]', '', lyrics_text)
-				
+
 				# Format and show lyrics
 				self.lyrics_view.setPlainText(lyrics_text.strip())
 				self.lyrics_view.selectAll()
 				self.lyrics_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
-				
+
 				# If sync lyrics, set initial inactive color
 				if self.sync_lyrics:
 					from PyQt6.QtGui import QTextCharFormat
@@ -2144,20 +2247,24 @@ class MusicPlayer(QMainWindow):
 					fmt = QTextCharFormat()
 					fmt.setForeground(inactive_color)
 					self.lyrics_view.textCursor().setCharFormat(fmt)
-				
+
 				# Deselect and scroll to top
 				cursor = self.lyrics_view.textCursor()
 				cursor.clearSelection()
 				cursor.movePosition(cursor.MoveOperation.Start)
 				self.lyrics_view.setTextCursor(cursor)
-				
+
 				self.content_stack.setCurrentIndex(1)
-				
+
 		except Exception as e:
 			import traceback
 			traceback.print_exc()
 			print(f"Error checking for lyrics: {e}")
 			self.statusBar().showMessage("Error reading lyrics")
+
+	def search_library(self):
+		dialog = SearchDialog(self.library, self)
+		dialog.exec()
 
 	def toggle_theme(self):
 		self.dark_mode = not self.dark_mode
@@ -2169,6 +2276,7 @@ class MusicPlayer(QMainWindow):
 		self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color))
 		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color))
 		self.lyrics_btn.setIcon(self.load_icon('lyrics.svg', icon_color))
+		self.search_btn.setIcon(self.load_icon('search.svg', icon_color))
 
 		# Update theme toggle button icon
 		theme_icon = 'mode-dark.svg' if self.dark_mode else 'mode-light.svg'
