@@ -10,7 +10,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QHBoxLayout, QPushButton, QTreeWidget, QTreeWidgetItem,
 							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
 							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
-							 QStatusBar, QListWidget, QListWidgetItem, QMenu)
+							 QStatusBar, QListWidget, QListWidgetItem, QMenu,
+							 QStackedWidget, QTextEdit)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
 from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -875,7 +876,27 @@ class MusicPlayer(QMainWindow):
 		self.splitter.setStretchFactor(0, 0)  # top_widget (genre/artist/album) - no stretch
 		self.splitter.setStretchFactor(1, 1)  # song_table - gets all the stretch
 
-		layout.addWidget(self.splitter)
+		# Content stack to toggle between library and lyrics
+		self.content_stack = QStackedWidget()
+		self.content_stack.addWidget(self.splitter)
+
+		# Lyrics panel
+		self.lyrics_view = QTextEdit()
+		self.lyrics_view.setReadOnly(True)
+		self.lyrics_view.setFrameStyle(0) # No frame
+		
+		# Load and set the Propo-Black font for lyrics
+		font_path_black = self.app_dir / 'fonts' / 'SauceCodeProNerdFontPropo-Black.ttf'
+		font_id_black = QFontDatabase.addApplicationFont(str(font_path_black))
+		if font_id_black != -1:
+			families = QFontDatabase.applicationFontFamilies(font_id_black)
+			if families:
+				# Use a larger size for lyrics
+				lyrics_font = QFont(families[0], 18)
+				self.lyrics_view.setFont(lyrics_font)
+		
+		self.content_stack.addWidget(self.lyrics_view)
+		layout.addWidget(self.content_stack)
 
 		# Status Bar
 		self.setStatusBar(QStatusBar())
@@ -1963,6 +1984,11 @@ class MusicPlayer(QMainWindow):
 			self.save_settings()
 
 	def show_lyrics(self):
+		# Toggle back to library if already showing lyrics
+		if self.content_stack.currentIndex() == 1:
+			self.content_stack.setCurrentIndex(0)
+			return
+
 		source = self.player.source().toLocalFile()
 		if not source or not os.path.exists(source):
 			self.statusBar().showMessage("No track playing")
@@ -1971,47 +1997,76 @@ class MusicPlayer(QMainWindow):
 		from mutagen import File
 		try:
 			audio = File(source)
-			lyrics_found = False
+			lyrics_text = None
 			
 			if audio:
 				# Check for different formats
 				ext = Path(source).suffix.lower()
 				
 				if ext == '.mp3':
-					# Check USLT (Unsynchronized lyrics) or SYLT (Synchronized lyrics) in ID3 tags
+					# Check USLT (Unsynchronized lyrics) in ID3 tags
 					if hasattr(audio, 'tags') and audio.tags:
-						for key in audio.tags.keys():
-							if key.startswith('USLT') or key.startswith('SYLT'):
-								lyrics_found = True
+						from mutagen.id3 import USLT, SYLT
+						for tag in audio.tags.values():
+							if isinstance(tag, USLT):
+								lyrics_text = tag.text
+								break
+							elif isinstance(tag, SYLT):
+								# For SYLT, we'd need to parse the binary data, but let's see if there's text
+								# For now, just indicate we found something or try to extract strings
+								lyrics_text = "[Synchronized lyrics found in metadata]"
 								break
 				elif ext == '.flac':
-					# FLAC vorbis comments (common tags: 'lyrics', 'unsyncedlyrics', 'unsynced lyrics')
+					# FLAC vorbis comments
 					for tag in ['lyrics', 'unsyncedlyrics', 'unsynced lyrics']:
-						if audio.get(tag):
-							lyrics_found = True
+						val = audio.get(tag)
+						if val:
+							lyrics_text = val[0]
 							break
 				elif ext in ['.m4a', '.mp4']:
 					# MP4 lyrics tag
-					if audio.get('\xa9lyr'):
-						lyrics_found = True
+					val = audio.get('\xa9lyr')
+					if val:
+						lyrics_text = val[0]
 			
 			# Search for external lyric files if metadata didn't have them
-			if not lyrics_found:
+			if not lyrics_text:
 				song_path = Path(source)
-				# Check for .lrc then .txt with same basename
 				lrc_path = song_path.with_suffix('.lrc')
 				txt_path = song_path.with_suffix('.txt')
 				
+				target_file = None
 				if lrc_path.exists():
-					lyrics_found = True
+					target_file = lrc_path
 				elif txt_path.exists():
-					lyrics_found = True
+					target_file = txt_path
+					
+				if target_file:
+					try:
+						with open(target_file, 'r', encoding='utf-8', errors='ignore') as f:
+							lyrics_text = f.read()
+					except Exception as e:
+						print(f"Error reading external lyric file: {e}")
 			
-			if not lyrics_found:
+			if not lyrics_text:
 				self.statusBar().showMessage("No lyrics found in metadata or directory", 5000)
 			else:
-				# Lyrics found - we'll handle displaying them later
-				pass
+				# Clean up timestamps from .lrc files for plain display if needed
+				import re
+				# Simple regex to remove [00:00.00] or [00:00:00] timestamps
+				cleaned_text = re.sub(r'\[\d{2,}:\d{2}[.:]\d{2,}\]', '', lyrics_text)
+				
+				# Format and show lyrics
+				self.lyrics_view.setPlainText(cleaned_text.strip())
+				self.lyrics_view.selectAll()
+				self.lyrics_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
+				# Deselect and scroll to top
+				cursor = self.lyrics_view.textCursor()
+				cursor.clearSelection()
+				cursor.movePosition(cursor.MoveOperation.Start)
+				self.lyrics_view.setTextCursor(cursor)
+				
+				self.content_stack.setCurrentIndex(1)
 				
 		except Exception as e:
 			print(f"Error checking for lyrics: {e}")
@@ -2026,6 +2081,7 @@ class MusicPlayer(QMainWindow):
 		self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color))
 		self.remember_position_btn.setIcon(self.load_icon('bookmark-on.svg' if self.remember_position else 'bookmark-off.svg', icon_color))
 		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color))
+		self.lyrics_btn.setIcon(self.load_icon('lyrics.svg', icon_color))
 
 		# Update theme toggle button icon
 		theme_icon = 'mode-dark.svg' if self.dark_mode else 'mode-light.svg'
@@ -2132,6 +2188,11 @@ class MusicPlayer(QMainWindow):
 			QTableWidget::item:selected {{
 				background-color: {selection_bg};
 				outline: none;
+				border: none;
+			}}
+			QTextEdit {{
+				background-color: {bg_color};
+				color: {text_color};
 				border: none;
 			}}
 			QHeaderView::section {{
