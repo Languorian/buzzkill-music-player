@@ -470,6 +470,8 @@ class EditMetadataDialog(QDialog):
 			QMessageBox.critical(self, "Error", f"Failed to save metadata: {e}")
 
 class SearchDialog(QDialog):
+	result_selected = pyqtSignal(dict)
+
 	def __init__(self, library, parent=None):
 		super().__init__(parent)
 		self.library = library
@@ -489,6 +491,7 @@ class SearchDialog(QDialog):
 		self.results_tree.setIndentation(20)
 		self.results_tree.setColumnWidth(0, 250)
 		self.results_tree.setColumnWidth(1, 80)
+		self.results_tree.itemDoubleClicked.connect(self.on_item_double_clicked)
 		layout.addWidget(self.results_tree)
 
 		# Top-level items
@@ -510,6 +513,16 @@ class SearchDialog(QDialog):
 		
 		# Set focus to search bar
 		self.search_bar.setFocus()
+
+	def on_item_double_clicked(self, item, column):
+		# Don't do anything if it's one of the root items
+		if item in [self.artists_root, self.albums_root, self.songs_root]:
+			return
+			
+		data = item.data(0, Qt.ItemDataRole.UserRole)
+		if data:
+			self.result_selected.emit(data)
+			self.accept()
 
 	def perform_search(self, query):
 		# Clear previous results
@@ -545,15 +558,18 @@ class SearchDialog(QDialog):
 
 		# Populate Artists
 		for artist in sorted(found_artists):
-			QTreeWidgetItem(self.artists_root, [artist, "Artist", ""])
+			item = QTreeWidgetItem(self.artists_root, [artist, "Artist", ""])
+			item.setData(0, Qt.ItemDataRole.UserRole, {'type': 'artist', 'artist': artist})
 
 		# Populate Albums
 		for album, artist in sorted(found_albums):
-			QTreeWidgetItem(self.albums_root, [album, "Album", f"by {artist}"])
+			item = QTreeWidgetItem(self.albums_root, [album, "Album", f"by {artist}"])
+			item.setData(0, Qt.ItemDataRole.UserRole, {'type': 'album', 'album': album, 'artist': artist})
 
 		# Populate Songs
 		for song in found_songs:
-			QTreeWidgetItem(self.songs_root, [song['title'], "Song", f"{song['artist']} - {song['album']}"])
+			item = QTreeWidgetItem(self.songs_root, [song['title'], "Song", f"{song['artist']} - {song['album']}"])
+			item.setData(0, Qt.ItemDataRole.UserRole, {'type': 'song', 'song': song})
 
 		# Show root items only if they have children
 		self.artists_root.setHidden(self.artists_root.childCount() == 0)
@@ -2057,7 +2073,10 @@ class MusicPlayer(QMainWindow):
 		for row in range(self.song_table.rowCount()):
 			current_song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
 			if current_song_path == target_path:
+				# Highlight only, do NOT play
 				self.song_table.selectRow(row)
+				# Scroll to it if needed
+				self.song_table.scrollToItem(self.song_table.item(row, 0))
 				break
 
 	def closeEvent(self, event):
@@ -2264,7 +2283,30 @@ class MusicPlayer(QMainWindow):
 
 	def search_library(self):
 		dialog = SearchDialog(self.library, self)
+		dialog.result_selected.connect(self.handle_search_selection)
 		dialog.exec()
+
+	def handle_search_selection(self, data):
+		# Navigate to the selected item in the library
+		# We use "All Genres" as a safe starting point for search results
+		genre = "All Genres"
+		artist = None
+		album = None
+		song = None
+
+		if data['type'] == 'artist':
+			artist = data['artist']
+			album = "All Albums"
+		elif data['type'] == 'album':
+			artist = data['artist']
+			album = data['album']
+		elif data['type'] == 'song':
+			artist = data['song']['artist']
+			album = data['song']['album']
+			song = data['song']
+
+		# Use restore_selection to navigate the trees and populate the table
+		self.restore_selection(genre, artist, album, song)
 
 	def toggle_theme(self):
 		self.dark_mode = not self.dark_mode
