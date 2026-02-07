@@ -11,9 +11,9 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
 							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
 							 QStatusBar, QListWidget, QListWidgetItem, QMenu,
-							 QStackedWidget, QTextEdit)
+							 QStackedWidget, QTextEdit, QGraphicsOpacityEffect)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
-from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 class ClickableSlider(QSlider):
@@ -2309,6 +2309,15 @@ class MusicPlayer(QMainWindow):
 		self.restore_selection(genre, artist, album, song)
 
 	def toggle_theme(self):
+		# Take a screenshot before switching for cross-fade animation
+		pixmap = self.grab()
+		
+		# Create an overlay label to show the old theme
+		overlay = QLabel(self)
+		overlay.setPixmap(pixmap)
+		overlay.setGeometry(0, 0, self.width(), self.height())
+		overlay.show()
+
 		self.dark_mode = not self.dark_mode
 		icon_color = 'white' if self.dark_mode else 'black'
 
@@ -2356,6 +2365,18 @@ class MusicPlayer(QMainWindow):
 
 		# Apply color scheme
 		self.apply_theme()
+
+		# Setup and start fade animation
+		opacity_effect = QGraphicsOpacityEffect(overlay)
+		overlay.setGraphicsEffect(opacity_effect)
+		
+		self.theme_anim = QPropertyAnimation(opacity_effect, b"opacity")
+		self.theme_anim.setDuration(400) # 400ms cross-fade
+		self.theme_anim.setStartValue(1.0)
+		self.theme_anim.setEndValue(0.0)
+		self.theme_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+		self.theme_anim.finished.connect(overlay.deleteLater)
+		self.theme_anim.start()
 
 	def apply_theme(self):
 		if self.dark_mode:
