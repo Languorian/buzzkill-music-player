@@ -514,6 +514,13 @@ class SearchDialog(QDialog):
 		# Set focus to search bar
 		self.search_bar.setFocus()
 
+	def changeEvent(self, event):
+		from PyQt6.QtCore import QEvent
+		if event.type() == QEvent.Type.ActivationChange:
+			if not self.isActiveWindow():
+				self.reject()
+		super().changeEvent(event)
+
 	def on_item_double_clicked(self, item, column):
 		# Don't do anything if it's one of the root items
 		if item in [self.artists_root, self.albums_root, self.songs_root]:
@@ -2282,9 +2289,9 @@ class MusicPlayer(QMainWindow):
 			self.statusBar().showMessage("Error reading lyrics")
 
 	def search_library(self):
-		dialog = SearchDialog(self.library, self)
-		dialog.result_selected.connect(self.handle_search_selection)
-		dialog.exec()
+		self.search_dialog = SearchDialog(self.library, self)
+		self.search_dialog.result_selected.connect(self.handle_search_selection)
+		self.search_dialog.show()
 
 	def handle_search_selection(self, data):
 		# Navigate to the selected item in the library
