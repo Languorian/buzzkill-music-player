@@ -529,6 +529,8 @@ class MusicPlayer(QMainWindow):
 		self.accent_color = "#1976d2"
 		self.show_album_art = False
 		self.is_restoring = False
+		self.sync_lyrics = []
+		self.last_lyric_index = -1
 
 		self.init_ui()
 		self.load_library()
@@ -1569,6 +1571,51 @@ class MusicPlayer(QMainWindow):
 				seconds = int((position % 60000) / 1000)
 				self.progress_label.setText(f"{minutes}:{seconds:02d}")
 
+		# Synchronized lyrics highlighting and scrolling
+		if self.sync_lyrics and self.content_stack.currentIndex() == 1:
+			# Find the current line based on position
+			current_index = -1
+			for i, (time_ms, _) in enumerate(self.sync_lyrics):
+				if position >= time_ms:
+					current_index = i
+				else:
+					break
+			
+			if current_index != -1 and current_index != self.last_lyric_index:
+				self.last_lyric_index = current_index
+				
+				# Highlight the current line
+				from PyQt6.QtGui import QTextCursor, QTextCharFormat
+				
+				# Reset all formatting to inactive color
+				cursor = self.lyrics_view.textCursor()
+				cursor.select(QTextCursor.SelectionType.Document)
+				format_reset = QTextCharFormat()
+				inactive_color = QColor("#555555") if self.dark_mode else QColor("#aaaaaa")
+				format_reset.setForeground(inactive_color)
+				cursor.setCharFormat(format_reset)
+				
+				# Apply highlight to current line
+				cursor.movePosition(QTextCursor.MoveOperation.Start)
+				for _ in range(current_index):
+					cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+				
+				cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+				format_highlight = QTextCharFormat()
+				# Active color: light gray for dark theme, black for light theme
+				active_color = QColor("#eeeeee") if self.dark_mode else QColor("#000000")
+				format_highlight.setForeground(active_color)
+				format_highlight.setFontWeight(QFont.Weight.Bold)
+				cursor.setCharFormat(format_highlight)
+				
+				# Ensure visible and center it
+				self.lyrics_view.setTextCursor(cursor)
+				self.lyrics_view.ensureCursorVisible()
+				
+				# Clear selection so it doesn't look like user selection
+				cursor.clearSelection()
+				self.lyrics_view.setTextCursor(cursor)
+
 	def update_duration(self, duration):
 		if duration >= 3600000:
 			hours = int(duration / 3600000)
@@ -1998,6 +2045,8 @@ class MusicPlayer(QMainWindow):
 		try:
 			audio = File(source)
 			lyrics_text = None
+			self.sync_lyrics = []
+			self.last_lyric_index = -1
 			
 			if audio:
 				# Check for different formats
@@ -2012,9 +2061,12 @@ class MusicPlayer(QMainWindow):
 								lyrics_text = tag.text
 								break
 							elif isinstance(tag, SYLT):
-								# For SYLT, we'd need to parse the binary data, but let's see if there's text
-								# For now, just indicate we found something or try to extract strings
-								lyrics_text = "[Synchronized lyrics found in metadata]"
+								# Mutagen SYLT data is a list of (text, timestamp)
+								# SYLT timestamps are usually in frames or milliseconds
+								# For now, let's just try to extract the text part
+								self.sync_lyrics = [(t, text) for text, t in tag.lyrics]
+								self.sync_lyrics.sort()
+								lyrics_text = "\n".join([item[1] for item in self.sync_lyrics])
 								break
 				elif ext == '.flac':
 					# FLAC vorbis comments
@@ -2029,8 +2081,8 @@ class MusicPlayer(QMainWindow):
 					if val:
 						lyrics_text = val[0]
 			
-			# Search for external lyric files if metadata didn't have them
-			if not lyrics_text:
+			# Search for external lyric files if metadata didn't have sync lyrics
+			if not self.sync_lyrics:
 				song_path = Path(source)
 				lrc_path = song_path.with_suffix('.lrc')
 				txt_path = song_path.with_suffix('.txt')
@@ -2045,21 +2097,54 @@ class MusicPlayer(QMainWindow):
 					try:
 						with open(target_file, 'r', encoding='utf-8', errors='ignore') as f:
 							lyrics_text = f.read()
+							
+						# Parse LRC for sync if it's an .lrc file
+						if target_file.suffix.lower() == '.lrc':
+							import re
+							lines = lyrics_text.splitlines()
+							self.sync_lyrics = []
+							for line in lines:
+								# Match [mm:ss.xx] or [mm:ss:xx] or [mm:ss]
+								matches = re.findall(r'\[(\d+):(\d+)([.:](\d+))?\]', line)
+								if matches:
+									pure_text = re.sub(r'\[\d+:\d+([.:]\d+)?\]', '', line).strip()
+									for m in matches:
+										minutes = int(m[0])
+										seconds = int(m[1])
+										msec = int(m[3]) if m[3] else 0
+										if m[3] and len(m[3]) == 2: msec *= 10
+										elif m[3] and len(m[3]) == 1: msec *= 100
+										
+										total_ms = (minutes * 60 + seconds) * 1000 + msec
+										self.sync_lyrics.append((total_ms, pure_text))
+							
+							if self.sync_lyrics:
+								self.sync_lyrics.sort()
+								lyrics_text = "\n".join([item[1] for item in self.sync_lyrics])
 					except Exception as e:
 						print(f"Error reading external lyric file: {e}")
 			
 			if not lyrics_text:
 				self.statusBar().showMessage("No lyrics found in metadata or directory", 5000)
 			else:
-				# Clean up timestamps from .lrc files for plain display if needed
-				import re
-				# Simple regex to remove [00:00.00] or [00:00:00] timestamps
-				cleaned_text = re.sub(r'\[\d{2,}:\d{2}[.:]\d{2,}\]', '', lyrics_text)
+				# Clean up timestamps from raw text if we aren't using sync
+				if not self.sync_lyrics:
+					import re
+					lyrics_text = re.sub(r'\[\d{2,}:\d{2}[.:]\d{2,}\]', '', lyrics_text)
 				
 				# Format and show lyrics
-				self.lyrics_view.setPlainText(cleaned_text.strip())
+				self.lyrics_view.setPlainText(lyrics_text.strip())
 				self.lyrics_view.selectAll()
 				self.lyrics_view.setAlignment(Qt.AlignmentFlag.AlignCenter)
+				
+				# If sync lyrics, set initial inactive color
+				if self.sync_lyrics:
+					from PyQt6.QtGui import QTextCharFormat
+					inactive_color = QColor("#555555") if self.dark_mode else QColor("#aaaaaa")
+					fmt = QTextCharFormat()
+					fmt.setForeground(inactive_color)
+					self.lyrics_view.textCursor().setCharFormat(fmt)
+				
 				# Deselect and scroll to top
 				cursor = self.lyrics_view.textCursor()
 				cursor.clearSelection()
@@ -2069,6 +2154,8 @@ class MusicPlayer(QMainWindow):
 				self.content_stack.setCurrentIndex(1)
 				
 		except Exception as e:
+			import traceback
+			traceback.print_exc()
 			print(f"Error checking for lyrics: {e}")
 			self.statusBar().showMessage("Error reading lyrics")
 
