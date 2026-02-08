@@ -1740,7 +1740,19 @@ class MusicPlayer(QMainWindow):
 
 				# Ensure visible and center it
 				self.lyrics_view.setTextCursor(cursor)
-				self.lyrics_view.ensureCursorVisible()
+				
+				# Center the current line in the view
+				scrollbar = self.lyrics_view.verticalScrollBar()
+				if scrollbar:
+					# Get the position of the current block
+					block = cursor.block()
+					block_pos = self.lyrics_view.document().documentLayout().blockBoundingRect(block).top()
+					
+					# Calculate the center position
+					viewport_height = self.lyrics_view.viewport().height()
+					center_offset = (viewport_height - self.lyrics_view.document().documentLayout().blockBoundingRect(block).height()) / 2
+					
+					scrollbar.setValue(int(block_pos - center_offset))
 
 				# Clear selection so it doesn't look like user selection
 				cursor.clearSelection()
