@@ -65,6 +65,8 @@ class LibraryScanner(QThread):
 							album = audio.get('album', ['Unknown Album'])[0] if audio.get('album') else 'Unknown Album'
 							title = audio.get('title', [Path(file).stem])[0] if audio.get('title') else Path(file).stem
 							track_num = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
+							if track_num == '0' or track_num == '00':
+								track_num = ''
 							year = audio.get('date', [''])[0] if audio.get('date') else ''
 							duration = audio.info.length if hasattr(audio, 'info') else 0
 
@@ -308,7 +310,7 @@ class EditMetadataDialog(QDialog):
 			("Artist", "artist"),
 			("Album", "album"),
 			("Year", "date"),
-			("#", "tracknumber"),
+			("Track #", "tracknumber"),
 			("Genre", "genre")
 		]
 
@@ -498,7 +500,7 @@ class SearchDialog(QDialog):
 		self.artists_root = QTreeWidgetItem(self.results_tree, ["Artists"])
 		self.albums_root = QTreeWidgetItem(self.results_tree, ["Albums"])
 		self.songs_root = QTreeWidgetItem(self.results_tree, ["Songs"])
-		
+
 		# Bold the root items
 		root_font = self.results_tree.font()
 		root_font.setBold(True)
@@ -510,7 +512,7 @@ class SearchDialog(QDialog):
 		self.artists_root.setExpanded(True)
 		self.albums_root.setExpanded(True)
 		self.songs_root.setExpanded(True)
-		
+
 		# Set focus to search bar
 		self.search_bar.setFocus()
 
@@ -525,7 +527,7 @@ class SearchDialog(QDialog):
 		# Don't do anything if it's one of the root items
 		if item in [self.artists_root, self.albums_root, self.songs_root]:
 			return
-			
+
 		data = item.data(0, Qt.ItemDataRole.UserRole)
 		if data:
 			self.result_selected.emit(data)
@@ -545,7 +547,7 @@ class SearchDialog(QDialog):
 			return
 
 		query = query.lower().strip()
-		
+
 		found_artists = set()
 		found_albums = set() # (album_name, artist_name)
 		found_songs = [] # list of song dicts
@@ -554,11 +556,11 @@ class SearchDialog(QDialog):
 			for artist in self.library[genre]:
 				if query in artist.lower():
 					found_artists.add(artist)
-				
+
 				for album in self.library[genre][artist]:
 					if query in album.lower():
 						found_albums.add((album, artist))
-					
+
 					for song in self.library[genre][artist][album]:
 						if query in song['title'].lower():
 							found_songs.append(song)
@@ -986,7 +988,7 @@ class MusicPlayer(QMainWindow):
 		# Song list
 		self.song_table = QTableWidget()
 		self.song_table.setColumnCount(7)
-		self.song_table.setHorizontalHeaderLabels(["#", "Title", "Artist", "Album", "Year", "Time", "Genre"])
+		self.song_table.setHorizontalHeaderLabels(["Track #", "Title", "Artist", "Album", "Year", "Time", "Genre"])
 		self.song_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 		self.song_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
 		self.song_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -1095,6 +1097,8 @@ class MusicPlayer(QMainWindow):
 						album = audio.get('album', ['Unknown Album'])[0] if audio.get('album') else 'Unknown Album'
 						title = audio.get('title', [Path(file).stem])[0] if audio.get('title') else Path(file).stem
 						track_num = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
+						if track_num == '0' or track_num == '00':
+							track_num = ''
 						year = audio.get('date', [''])[0] if audio.get('date') else ''
 						duration = audio.info.length if hasattr(audio, 'info') else 0
 
@@ -1962,13 +1966,15 @@ class MusicPlayer(QMainWindow):
 					duration = 0
 
 				# Track number processing
-				if '/' in str(track_num_raw):
-					track_num_display = str(track_num_raw).split('/')[0]
-				else:
-					track_num_display = str(track_num_raw)
+				track_num_display = str(track_num_raw).strip()
+				if '/' in track_num_display:
+					track_num_display = track_num_display.split('/')[0]
+
+				if track_num_display == '0' or track_num_display == '00' or not track_num_display:
+					track_num_display = ""
 
 				try:
-					track_num_sort = int(track_num_display)
+					track_num_sort = int(track_num_display) if track_num_display else 999
 				except:
 					track_num_sort = 999
 
@@ -2318,7 +2324,7 @@ class MusicPlayer(QMainWindow):
 	def toggle_theme(self):
 		# Take a screenshot before switching for cross-fade animation
 		pixmap = self.grab()
-		
+
 		# Create an overlay label to show the old theme
 		overlay = QLabel(self)
 		overlay.setPixmap(pixmap)
@@ -2376,7 +2382,7 @@ class MusicPlayer(QMainWindow):
 		# Setup and start fade animation
 		opacity_effect = QGraphicsOpacityEffect(overlay)
 		overlay.setGraphicsEffect(opacity_effect)
-		
+
 		self.theme_anim = QPropertyAnimation(opacity_effect, b"opacity")
 		self.theme_anim.setDuration(400) # 400ms cross-fade
 		self.theme_anim.setStartValue(1.0)
@@ -2608,13 +2614,16 @@ class MusicPlayer(QMainWindow):
 
 			try:
 				# Handle "1/12" format
-				if '/' in str(track_num_raw):
-					track_num = track_num_raw.split('/')[0]
+				track_num_str = str(track_num_raw).strip()
+				if '/' in track_num_str:
+					track_num = track_num_str.split('/')[0]
 				else:
-					track_num = track_num_raw
+					track_num = track_num_str
 
 				try:
 					track_num = int(track_num)
+					if track_num == 0:
+						track_num = 9999
 				except:
 					track_num = 9999  # Put tracks without numbers at the end
 
@@ -2654,10 +2663,10 @@ class MusicPlayer(QMainWindow):
 			return
 
 		self.show_album_art = not self.show_album_art
-		
+
 		total_width = self.horizontal_splitter.width()
 		start_sizes = self.horizontal_splitter.sizes()
-		
+
 		if self.show_album_art:
 			self.album_art_label.show()
 			self.update_album_art()
@@ -2684,10 +2693,10 @@ class MusicPlayer(QMainWindow):
 			self.horizontal_splitter.setSizes(current_sizes)
 
 		self.art_anim.valueChanged.connect(animate_splitter)
-		
+
 		if not self.show_album_art:
 			self.art_anim.finished.connect(self.album_art_label.hide)
-			
+
 		self.art_anim.start()
 		self.save_settings()
 
