@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QStatusBar, QListWidget, QListWidgetItem, QMenu,
 							 QStackedWidget, QTextEdit, QGraphicsOpacityEffect)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
-from PyQt6.QtCore import Qt, QUrl, QSize, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QVariantAnimation
+from PyQt6.QtCore import Qt, QUrl, QSize, QRect, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QVariantAnimation
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 class ClickableSlider(QSlider):
@@ -644,6 +644,8 @@ class MusicPlayer(QMainWindow):
 		self.remember_position = False
 		self.accent_color = "#1976d2"
 		self.show_album_art = False
+		self.is_shrunk = False
+		self.expanded_geometry = None
 		self.is_restoring = False
 		self.sync_lyrics = []
 		self.last_lyric_index = -1
@@ -686,12 +688,12 @@ class MusicPlayer(QMainWindow):
 		# ===========================
 		# 1. LEFT SECTION
 		# ===========================
-		left_container = QWidget()
-		left_container.setMinimumWidth(200)
+		self.left_container = QWidget()
+		self.left_container.setMinimumWidth(200)
 		# We remove MaximumWidth so it can expand if needed to balance the grid,
 		# but the layout inside keeps buttons to the left.
 
-		left_controls = QHBoxLayout(left_container)
+		left_controls = QHBoxLayout(self.left_container)
 		left_controls.setContentsMargins(0, 0, 0, 0)
 		left_controls.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
@@ -838,10 +840,10 @@ class MusicPlayer(QMainWindow):
 		# ===========================
 		# 3. RIGHT SECTION
 		# ===========================
-		right_container = QWidget()
-		right_container.setMinimumWidth(200)
+		self.right_container = QWidget()
+		self.right_container.setMinimumWidth(200)
 
-		right_controls = QHBoxLayout(right_container)
+		right_controls = QHBoxLayout(self.right_container)
 		right_controls.setContentsMargins(0, 0, 0, 0)
 
 		right_controls.addStretch()
@@ -892,13 +894,13 @@ class MusicPlayer(QMainWindow):
 		# (Widget, Row, Column, Alignment)
 
 		# Left container in Col 0, Aligned Left
-		controls_layout.addWidget(left_container, 0, 0, Qt.AlignmentFlag.AlignLeft)
+		controls_layout.addWidget(self.left_container, 0, 0, Qt.AlignmentFlag.AlignLeft)
 
 		# Center container in Col 1, Aligned Center
 		controls_layout.addWidget(center_container, 0, 1, Qt.AlignmentFlag.AlignCenter)
 
 		# Right container in Col 2, Aligned Right
-		controls_layout.addWidget(right_container, 0, 2, Qt.AlignmentFlag.AlignRight)
+		controls_layout.addWidget(self.right_container, 0, 2, Qt.AlignmentFlag.AlignRight)
 
 		# Add the controls grid to the main layout
 		layout.addLayout(controls_layout)
@@ -911,8 +913,8 @@ class MusicPlayer(QMainWindow):
 		# Now Playing section
 		now_playing_layout = QHBoxLayout()
 		now_playing_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-		now_playing_label = QLabel("Now Playing:")
-		now_playing_layout.addWidget(now_playing_label)
+		self.now_playing_label = QLabel("Now Playing:")
+		now_playing_layout.addWidget(self.now_playing_label)
 
 		self.now_playing_text = QLabel("---")
 		self.now_playing_text.setStyleSheet("font-weight: bold;")
@@ -1493,7 +1495,14 @@ class MusicPlayer(QMainWindow):
 			'remember_position': self.remember_position,
 			'volume': self.volume_slider.value(),
 			'accent_color': self.accent_color,
-			'show_album_art': self.show_album_art
+			'show_album_art': self.show_album_art,
+			'is_shrunk': self.is_shrunk,
+			'expanded_geometry': [
+				self.expanded_geometry.x(),
+				self.expanded_geometry.y(),
+				self.expanded_geometry.width(),
+				self.expanded_geometry.height()
+			] if self.expanded_geometry else None
 		}
 
 		try:
@@ -1599,9 +1608,45 @@ class MusicPlayer(QMainWindow):
 			else:
 				self.album_art_label.hide()
 
+			# Restore shrink state
+			self.is_shrunk = settings.get('is_shrunk', False)
+			expanded_geo = settings.get('expanded_geometry')
+			if expanded_geo:
+				self.expanded_geometry = QRect(*expanded_geo)
+
+			icon_color = 'white' if self.dark_mode else 'black'
+			if self.is_shrunk:
+				# Hide non-essential sections
+				self.content_stack.hide()
+				self.right_container.hide()
+				self.now_playing_label.hide()
+				self.statusBar().hide()
+
+				# Hide all buttons in left section EXCEPT shrink/expand
+				self.add_folder_btn.hide()
+				self.rescan_btn.hide()
+				self.remember_position_btn.hide()
+				self.show_album_art_btn.hide()
+				self.darkmode_btn.hide()
+				self.accent_btn.hide()
+
+				# Remove minimum width constraint temporarily
+				self.left_container.setMinimumWidth(0)
+
+				# Set fixed size for mini mode
+				self.setFixedSize(400, 107)
+
+				shrink_icon = 'expand.svg'
+				self.shrink_expand_btn.setToolTip("Expand the Interface")
+			else:
+				self.content_stack.show()
+				shrink_icon = 'shrink.svg'
+				self.shrink_expand_btn.setToolTip("Shrink the Interface")
+
+			self.shrink_expand_btn.setIcon(self.load_icon(shrink_icon, icon_color))
+
 			# Apply theme after loading all settings
 			self.apply_theme()
-
 			# Reload all style-affected icons with the restored button style
 			self.add_folder_btn.setIcon(self.load_icon('add-folder.svg', icon_color))
 			self.rescan_btn.setIcon(self.load_icon('rescan.svg', icon_color))
@@ -2368,6 +2413,10 @@ class MusicPlayer(QMainWindow):
 		theme_icon = 'mode-dark.svg' if self.dark_mode else 'mode-light.svg'
 		self.darkmode_btn.setIcon(self.load_icon(theme_icon, icon_color))
 
+		# Update shrink/expand button icon
+		shrink_icon = 'expand.svg' if self.is_shrunk else 'shrink.svg'
+		self.shrink_expand_btn.setIcon(self.load_icon(shrink_icon, icon_color))
+
 		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color))
 		self.next_btn.setIcon(self.load_icon('next.svg', icon_color))
 		# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color))
@@ -2855,8 +2904,65 @@ class MusicPlayer(QMainWindow):
 		print("Restoration complete")
 
 	def shrink_and_expand(self):
-		# code to shrink/expand the interface will go here
-		pass
+		self.is_shrunk = not self.is_shrunk
+		icon_color = 'white' if self.dark_mode else 'black'
+
+		if self.is_shrunk:
+			# Shrinking to mini-player
+			self.expanded_geometry = self.geometry()
+
+			# Hide non-essential sections
+			self.content_stack.hide()
+			self.right_container.hide()
+			self.now_playing_label.hide()
+			self.statusBar().hide()
+
+			# Hide all buttons in left section EXCEPT shrink/expand
+			self.add_folder_btn.hide()
+			self.rescan_btn.hide()
+			self.remember_position_btn.hide()
+			self.show_album_art_btn.hide()
+			self.darkmode_btn.hide()
+			self.accent_btn.hide()
+
+			# Remove minimum width constraint temporarily
+			self.left_container.setMinimumWidth(0)
+
+			# Set fixed size for mini mode
+			self.setFixedSize(400, 107)
+
+			self.shrink_expand_btn.setIcon(self.load_icon('expand.svg', icon_color))
+			self.shrink_expand_btn.setToolTip("Expand the Interface")
+		else:
+			# Expanding to full view
+			self.setMinimumSize(400, 400)
+			self.setMaximumSize(16777215, 16777215)
+
+			# Show all sections
+			self.content_stack.show()
+			self.right_container.show()
+			self.now_playing_label.show()
+			self.statusBar().show()
+
+			# Show all buttons in left section
+			self.add_folder_btn.show()
+			self.rescan_btn.show()
+			self.remember_position_btn.show()
+			self.show_album_art_btn.show()
+			self.darkmode_btn.show()
+			self.accent_btn.show()
+
+			# Restore minimum width constraint
+			self.left_container.setMinimumWidth(200)
+
+			self.shrink_expand_btn.setIcon(self.load_icon('shrink.svg', icon_color))
+			self.shrink_expand_btn.setToolTip("Shrink the Interface")
+
+			if self.expanded_geometry:
+				self.setGeometry(self.expanded_geometry)
+			else:
+				self.resize(1200, 720)
+		self.save_settings()
 
 if __name__ == '__main__':
 	# Windows-specific: Set App User Model ID for custom taskbar icon
