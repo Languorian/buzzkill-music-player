@@ -745,6 +745,16 @@ class MusicPlayer(QMainWindow):
 		self.darkmode_btn.clicked.connect(self.toggle_theme)
 		left_controls.addWidget(self.darkmode_btn)
 
+		# Shrink/Expand button
+		self.shrink_expand_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.shrink_expand_btn.setIcon(self.load_icon('shrink.svg', icon_color)) # Change to expand.svg when in shrink mode
+		self.shrink_expand_btn.setIconSize(self.icon_size)
+		self.shrink_expand_btn.setToolTip("Shrink/Expand the Interface")
+		self.shrink_expand_btn.setFlat(True)
+		self.shrink_expand_btn.clicked.connect(self.shrink_and_expand)
+		left_controls.addWidget(self.shrink_expand_btn)
+
 		# Accent Color button
 		self.accent_btn = QPushButton()
 		self.accent_btn.setIconSize(self.icon_size)
@@ -1740,18 +1750,18 @@ class MusicPlayer(QMainWindow):
 
 				# Ensure visible and center it
 				self.lyrics_view.setTextCursor(cursor)
-				
+
 				# Center the current line in the view
 				scrollbar = self.lyrics_view.verticalScrollBar()
 				if scrollbar:
 					# Get the position of the current block
 					block = cursor.block()
 					block_pos = self.lyrics_view.document().documentLayout().blockBoundingRect(block).top()
-					
+
 					# Calculate the center position
 					viewport_height = self.lyrics_view.viewport().height()
 					center_offset = (viewport_height - self.lyrics_view.document().documentLayout().blockBoundingRect(block).height()) / 2
-					
+
 					scrollbar.setValue(int(block_pos - center_offset))
 
 				# Clear selection so it doesn't look like user selection
@@ -2843,6 +2853,10 @@ class MusicPlayer(QMainWindow):
 	def _clear_restoring_flag(self):
 		self.is_restoring = False
 		print("Restoration complete")
+
+	def shrink_and_expand(self):
+		# code to shrink/expand the interface will go here
+		pass
 
 if __name__ == '__main__':
 	# Windows-specific: Set App User Model ID for custom taskbar icon
