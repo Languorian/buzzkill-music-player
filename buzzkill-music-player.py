@@ -1313,12 +1313,29 @@ class MusicPlayer(QMainWindow):
 		row = item.row()
 		song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
 
-		# Build playlist from current song table
+		# Build playlist from current song table to preserve current sorting/filtering
 		self.current_playlist = []
 		for i in range(self.song_table.rowCount()):
-			# We need to store the path in UserRole+1 consistently
+			# Extract all metadata from table columns to maintain consistency
 			path = self.song_table.item(i, 0).data(Qt.ItemDataRole.UserRole + 1)
-			self.current_playlist.append({'path': path}) # Keep it consistent with expected dict format
+			track_num = self.song_table.item(i, 0).text()
+			title = self.song_table.item(i, 1).text()
+			artist = self.song_table.item(i, 2).text()
+			album = self.song_table.item(i, 3).text()
+			year = self.song_table.item(i, 4).text()
+			duration = self.song_table.item(i, 5).data(Qt.ItemDataRole.UserRole)
+			genre = self.song_table.item(i, 6).text()
+
+			self.current_playlist.append({
+				'path': path,
+				'tracknumber': track_num,
+				'title': title,
+				'artist': artist,
+				'album': album,
+				'year': year,
+				'duration': duration,
+				'genre': genre
+			})
 
 		self.current_track_index = row
 		self.play_song(song_path)
