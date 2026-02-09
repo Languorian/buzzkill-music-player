@@ -880,10 +880,11 @@ class MusicPlayer(QMainWindow):
 
 		# Accent Color button
 		self.accent_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.accent_btn.setIcon(self.load_icon('paint.svg', icon_color))
 		self.accent_btn.setIconSize(self.icon_size)
 		self.accent_btn.setToolTip("Change accent color")
 		self.accent_btn.setFlat(True)
-		self.update_accent_icon()
 		self.accent_btn.clicked.connect(self.choose_accent_color)
 		left_controls.addWidget(self.accent_btn)
 
@@ -1703,7 +1704,6 @@ class MusicPlayer(QMainWindow):
 			# Restore accent color
 			self.accent_color = settings.get('accent_color', "#1976d2")
 			self.manual_accent_color = self.accent_color
-			self.update_accent_icon()
 
 			# Restore dynamic accent color state
 			self.dynamic_accent_color_enabled = settings.get('dynamic_accent_color_enabled', False)
@@ -2373,17 +2373,6 @@ class MusicPlayer(QMainWindow):
 		else:
 			return QIcon(str(icon_path))
 
-	def update_accent_icon(self):
-		pixmap = QPixmap(self.icon_size)
-		pixmap.fill(Qt.GlobalColor.transparent)
-		painter = QPainter(pixmap)
-		painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-		painter.setBrush(QColor(self.accent_color))
-		painter.setPen(Qt.PenStyle.NoPen)
-		painter.drawEllipse(2, 2, self.icon_size.width()-4, self.icon_size.height()-4)
-		painter.end()
-		self.accent_btn.setIcon(QIcon(pixmap))
-
 	def choose_accent_color(self):
 		dialog = ColorPickerDialog(self, self.manual_accent_color, self.dynamic_accent_color_enabled, self.detected_dynamic_color, self.dark_mode)
 		# Connect real-time updates while dialog is open
@@ -2399,7 +2388,6 @@ class MusicPlayer(QMainWindow):
 			else:
 				# Restore the manually chosen accent color (which is blue if they just unchecked dynamic)
 				self.accent_color = self.manual_accent_color
-				self.update_accent_icon()
 				self.apply_theme()
 
 		# Disconnect to avoid memory leaks/stale references
@@ -2482,7 +2470,6 @@ class MusicPlayer(QMainWindow):
 			if artwork_found and pixmap:
 				if vibrant:
 					self.accent_color = self.detected_dynamic_color
-					self.update_accent_icon()
 					self.apply_theme()
 				else:
 					# Fallback to manual color if extraction fails or art is too "boring"
@@ -2505,7 +2492,6 @@ class MusicPlayer(QMainWindow):
 	def restore_manual_accent_color(self):
 		if self.accent_color != self.manual_accent_color:
 			self.accent_color = self.manual_accent_color
-			self.update_accent_icon()
 			self.apply_theme()
 
 	def show_lyrics(self):
@@ -2684,6 +2670,7 @@ class MusicPlayer(QMainWindow):
 		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color))
 		self.lyrics_btn.setIcon(self.load_icon('lyrics.svg', icon_color))
 		self.search_btn.setIcon(self.load_icon('search.svg', icon_color))
+		self.accent_btn.setIcon(self.load_icon('paint.svg', icon_color))
 
 		# Update theme toggle button icon
 		theme_icon = 'mode-dark.svg' if self.dark_mode else 'mode-light.svg'
