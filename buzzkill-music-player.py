@@ -1182,7 +1182,17 @@ class MusicPlayer(QMainWindow):
 
 		# Status Bar
 		self.setStatusBar(QStatusBar())
-		self.statusBar().showMessage("Ready")
+		self.statusBar().setSizeGripEnabled(False)
+		self.status_label = QLabel("Ready")
+		self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+		self.statusBar().addWidget(self.status_label, 1)
+
+	def show_status_message(self, message, timeout=0):
+		self.status_label.setText(message)
+		if timeout > 0:
+			from PyQt6.QtCore import QTimer
+			# Use a timer to clear the message after the timeout
+			QTimer.singleShot(timeout, lambda: self.status_label.setText("") if self.status_label.text() == message else None)
 
 	def add_folder(self):
 		self.library_dialog = LibraryFoldersDialog(self.watched_folders, self)
@@ -1196,7 +1206,7 @@ class MusicPlayer(QMainWindow):
 
 	def load_library(self):
 		if not self.library_file.exists():
-			self.statusBar().showMessage("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
+			self.show_status_message("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
 			print("No saved library found")
 			return
 
@@ -1208,9 +1218,9 @@ class MusicPlayer(QMainWindow):
 			self.watched_folders = data.get('watched_folders', [])
 
 			if not self.watched_folders:
-				self.statusBar().showMessage("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
+				self.show_status_message("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
 			else:
-				self.statusBar().showMessage("Ready")
+				self.show_status_message("Ready")
 
 			self.populate_genre_tree()
 			print(f"Library loaded: {len(self.watched_folders)} folders")
@@ -1503,13 +1513,13 @@ class MusicPlayer(QMainWindow):
 		song_path = self.song_table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
 
 		if not song_path or not os.path.exists(song_path):
-			self.statusBar().showMessage("Error: Song file not found.")
+			self.show_status_message("Error: Song file not found.")
 			return
 
 		dialog = EditMetadataDialog(song_path, self)
 		if dialog.exec():
 			# Refresh the library and UI
-			self.statusBar().showMessage("Metadata saved. Refreshing library...")
+			self.show_status_message("Metadata saved. Refreshing library...")
 
 			# If the edited song is the one currently playing, refresh the album art
 			current_source = self.player.source().toLocalFile()
@@ -1874,7 +1884,7 @@ class MusicPlayer(QMainWindow):
 		self.rescan_btn.setEnabled(False)
 		self.add_folder_btn.setEnabled(False)
 		self.rescan_btn.setToolTip("Scanning library in background...")
-		self.statusBar().showMessage("Scanning library...")
+		self.show_status_message("Scanning library...")
 
 		# Create and start the background scanner
 		self.scanner = LibraryScanner(self.watched_folders)
@@ -1912,10 +1922,10 @@ class MusicPlayer(QMainWindow):
 			if sel_genre:
 				self.restore_selection(sel_genre, sel_artist, sel_album, sel_song)
 
-			self.statusBar().showMessage("Library scan complete", 5000)
+			self.show_status_message("Library scan complete", 5000)
 			print("Background rescan complete")
 		else:
-			self.statusBar().showMessage("Library scan finished: No files found", 5000)
+			self.show_status_message("Library scan finished: No files found", 5000)
 			print("Background rescan finished with no files found")
 
 	def handle_player_error(self, error):
@@ -2525,7 +2535,7 @@ class MusicPlayer(QMainWindow):
 
 		source = self.player.source().toLocalFile()
 		if not source or not os.path.exists(source):
-			self.statusBar().showMessage("No track playing")
+			self.show_status_message("No track playing")
 			return
 
 		from mutagen import File
@@ -2612,7 +2622,7 @@ class MusicPlayer(QMainWindow):
 						print(f"Error reading external lyric file: {e}")
 
 			if not lyrics_text:
-				self.statusBar().showMessage("No lyrics found in metadata or directory", 5000)
+				self.show_status_message("No lyrics found in metadata or directory", 5000)
 			else:
 				# Clean up timestamps from raw text if we aren't using sync
 				if not self.sync_lyrics:
@@ -2644,7 +2654,7 @@ class MusicPlayer(QMainWindow):
 			import traceback
 			traceback.print_exc()
 			print(f"Error checking for lyrics: {e}")
-			self.statusBar().showMessage("Error reading lyrics")
+			self.show_status_message("Error reading lyrics")
 
 	def search_library(self):
 		self.search_dialog = SearchDialog(self.library, self)
@@ -2849,6 +2859,13 @@ class MusicPlayer(QMainWindow):
 			}}
 			QSplitter::handle {{
 				background-color: {border_color};
+			}}
+			QStatusBar {{
+				background-color: {bg_color};
+				border: none;
+			}}
+			QStatusBar::item {{
+				border: none;
 			}}
 		""")
 
