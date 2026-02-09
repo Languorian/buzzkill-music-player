@@ -11,9 +11,10 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
 							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
 							 QStatusBar, QListWidget, QListWidgetItem, QMenu,
-							 QStackedWidget, QTextEdit, QGraphicsOpacityEffect)
+							 QStackedWidget, QTextEdit, QGraphicsOpacityEffect, QCheckBox)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
-from PyQt6.QtCore import Qt, QUrl, QSize, QRect, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QVariantAnimation
+from PyQt6.QtCore import (Qt, QUrl, QSize, QRect, QThread, pyqtSignal, 
+						  QPropertyAnimation, QEasingCurve, QVariantAnimation)
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 class ClickableSlider(QSlider):
@@ -97,18 +98,24 @@ class LibraryScanner(QThread):
 		self.finished.emit(new_library)
 
 class ColorPickerDialog(QDialog):
-	def __init__(self, parent=None, initial_color="#1976d2"):
+	def __init__(self, parent=None, initial_color="#0E47A1", dynamic_enabled=False, dynamic_color="#0E47A1", dark_mode=True):
 		super().__init__(parent)
 		self.setWindowTitle("Select Accent Color")
 		self.setFixedWidth(300)
+		self.dynamic_color = dynamic_color
+		self.dark_mode = dark_mode
+		self.last_manual_color = QColor(initial_color)
 
 		layout = QVBoxLayout(self)
 
 		# Current color preview
-		self.color = QColor(initial_color)
+		if dynamic_enabled:
+			self.color = QColor(dynamic_color)
+		else:
+			self.color = QColor(initial_color)
+		
 		self.preview = QWidget()
 		self.preview.setFixedHeight(80)
-		self.update_preview()
 		layout.addWidget(self.preview)
 
 		# RGB Sliders
@@ -124,19 +131,69 @@ class ColorPickerDialog(QDialog):
 		hex_layout.addWidget(self.hex_input)
 		layout.addLayout(hex_layout)
 
+		# Dynamic Toggle
+		dynamic_layout = QHBoxLayout()
+		self.dynamic_checkbox = QCheckBox("Dynamic Accent (from art)")
+		self.dynamic_checkbox.setChecked(dynamic_enabled)
+		self.dynamic_checkbox.toggled.connect(self.on_dynamic_toggled)
+		dynamic_layout.addWidget(self.dynamic_checkbox)
+		layout.addLayout(dynamic_layout)
+
+		# Initialize enabled state of manual controls
+		self.r_slider.setEnabled(not dynamic_enabled)
+		self.g_slider.setEnabled(not dynamic_enabled)
+		self.b_slider.setEnabled(not dynamic_enabled)
+		self.hex_input.setEnabled(not dynamic_enabled)
+
 		# Buttons
 		btn_layout = QHBoxLayout()
 		ok_btn = QPushButton("OK")
 		ok_btn.clicked.connect(self.accept)
 		cancel_btn = QPushButton("Cancel")
 		cancel_btn.clicked.connect(self.reject)
-		default_btn = QPushButton("Default")
-		default_btn.clicked.connect(lambda: self.hex_input.setText("#0E47A1"))
+		self.default_btn = QPushButton("Default")
+		self.default_btn.clicked.connect(lambda: self.hex_input.setText("#0E47A1"))
+		self.default_btn.setEnabled(not dynamic_enabled)
 
 		btn_layout.addWidget(ok_btn)
 		btn_layout.addWidget(cancel_btn)
-		btn_layout.addWidget(default_btn)
+		btn_layout.addWidget(self.default_btn)
 		layout.addLayout(btn_layout)
+
+		# Now that everything is created, update preview and styles
+		self.update_preview()
+
+	def on_dynamic_toggled(self, checked):
+		# Block signals to avoid partial color updates while setting RGB sliders
+		# which would corrupt last_manual_color
+		self.r_slider.blockSignals(True)
+		self.g_slider.blockSignals(True)
+		self.b_slider.blockSignals(True)
+
+		self.r_slider.setEnabled(not checked)
+		self.g_slider.setEnabled(not checked)
+		self.b_slider.setEnabled(not checked)
+		self.hex_input.setEnabled(not checked)
+		self.default_btn.setEnabled(not checked)
+		
+		if checked:
+			# Update sliders to the dynamic artwork color
+			color = QColor(self.dynamic_color)
+			self.r_slider.setValue(color.red())
+			self.g_slider.setValue(color.green())
+			self.b_slider.setValue(color.blue())
+		else:
+			# Restore to last used manual color
+			self.r_slider.setValue(self.last_manual_color.red())
+			self.g_slider.setValue(self.last_manual_color.green())
+			self.b_slider.setValue(self.last_manual_color.blue())
+
+		self.r_slider.blockSignals(False)
+		self.g_slider.blockSignals(False)
+		self.b_slider.blockSignals(False)
+
+		# Manually trigger one update to sync self.color and preview
+		self.on_slider_changed()
 
 	def create_slider(self, label, value, parent_layout):
 		layout = QHBoxLayout()
@@ -156,10 +213,46 @@ class ColorPickerDialog(QDialog):
 		return slider
 
 	def update_preview(self):
-		self.preview.setStyleSheet(f"background-color: {self.color.name()}; border: 1px solid #3d3d3d; border-radius: 4px;")
+		color_name = self.color.name()
+		self.preview.setStyleSheet(f"background-color: {color_name}; border: 1px solid #3d3d3d; border-radius: 4px;")
+		
+		if self.dark_mode:
+			slider_subpage = color_name
+			text_color = "#ffffff"
+			border_color = "#3d3d3d"
+		else:
+			slider_subpage = self.color.lighter(120).name()
+			text_color = "#1a1a1a"
+			border_color = "#c0c0c0"
+
+		slider_style = f"""
+			QSlider::groove:horizontal {{
+				background: {border_color};
+				height: 4px;
+				border-radius: 2px;
+			}}
+			QSlider::handle:horizontal {{
+				background: {text_color};
+				width: 12px;
+				margin: -4px 0;
+				border-radius: 6px;
+			}}
+			QSlider::sub-page:horizontal {{
+				background: {slider_subpage};
+				border-radius: 2px;
+			}}
+		"""
+		self.r_slider.setStyleSheet(slider_style)
+		self.g_slider.setStyleSheet(slider_style)
+		self.b_slider.setStyleSheet(slider_style)
 
 	def on_slider_changed(self):
 		self.color = QColor(self.r_slider.value(), self.g_slider.value(), self.b_slider.value())
+		
+		# Keep track of the last manual color choice
+		if not self.dynamic_checkbox.isChecked():
+			self.last_manual_color = self.color
+
 		self.hex_input.blockSignals(True)
 		self.hex_input.setText(self.color.name().upper())
 		self.hex_input.blockSignals(False)
@@ -168,6 +261,11 @@ class ColorPickerDialog(QDialog):
 	def on_hex_changed(self, text):
 		if QColor.isValidColorName(text):
 			self.color = QColor(text)
+			
+			# Update last used manual color if dynamic is off
+			if not self.dynamic_checkbox.isChecked():
+				self.last_manual_color = self.color
+
 			self.r_slider.blockSignals(True)
 			self.g_slider.blockSignals(True)
 			self.b_slider.blockSignals(True)
@@ -181,6 +279,24 @@ class ColorPickerDialog(QDialog):
 
 	def get_color(self):
 		return self.color.name()
+
+	def get_dynamic_enabled(self):
+		return self.dynamic_checkbox.isChecked()
+
+	def update_dynamic_color(self, new_color):
+		self.dynamic_color = new_color
+		if self.dynamic_checkbox.isChecked():
+			color = QColor(new_color)
+			self.r_slider.blockSignals(True)
+			self.g_slider.blockSignals(True)
+			self.b_slider.blockSignals(True)
+			self.r_slider.setValue(color.red())
+			self.g_slider.setValue(color.green())
+			self.b_slider.setValue(color.blue())
+			self.r_slider.blockSignals(False)
+			self.g_slider.blockSignals(False)
+			self.b_slider.blockSignals(False)
+			self.on_slider_changed()
 
 class LibraryFoldersDialog(QDialog):
 	def __init__(self, watched_folders, parent=None):
@@ -586,6 +702,8 @@ class SearchDialog(QDialog):
 		self.songs_root.setHidden(self.songs_root.childCount() == 0)
 
 class MusicPlayer(QMainWindow):
+	dynamic_color_updated = pyqtSignal(str)
+
 	def __init__(self):
 		super().__init__()
 
@@ -642,11 +760,14 @@ class MusicPlayer(QMainWindow):
 		self.shuffle_enabled = False
 		self.unshuffled_playlist = []
 		self.remember_position = False
-		self.accent_color = "#1976d2"
+		self.accent_color = "#0E47A1"
+		self.manual_accent_color = "#0E47A1"
+		self.dynamic_accent_color_enabled = False
 		self.show_album_art = False
 		self.is_shrunk = False
 		self.expanded_geometry = None
 		self.is_restoring = False
+		self.detected_dynamic_color = "#0E47A1"
 		self.sync_lyrics = []
 		self.last_lyric_index = -1
 
@@ -750,7 +871,7 @@ class MusicPlayer(QMainWindow):
 		# Shrink/Expand button
 		self.shrink_expand_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
-		self.shrink_expand_btn.setIcon(self.load_icon('shrink.svg', icon_color)) # Change to expand.svg when in shrink mode
+		self.shrink_expand_btn.setIcon(self.load_icon('shrink.svg', icon_color))
 		self.shrink_expand_btn.setIconSize(self.icon_size)
 		self.shrink_expand_btn.setToolTip("Shrink/Expand the Interface")
 		self.shrink_expand_btn.setFlat(True)
@@ -1511,7 +1632,8 @@ class MusicPlayer(QMainWindow):
 			'shuffle_enabled': self.shuffle_enabled,
 			'remember_position': self.remember_position,
 			'volume': self.volume_slider.value(),
-			'accent_color': self.accent_color,
+			'accent_color': self.manual_accent_color,
+			'dynamic_accent_color_enabled': self.dynamic_accent_color_enabled,
 			'show_album_art': self.show_album_art,
 			'is_shrunk': self.is_shrunk,
 			'progress_slider_min_width': self.progress_slider.minimumWidth(),
@@ -1580,7 +1702,11 @@ class MusicPlayer(QMainWindow):
 
 			# Restore accent color
 			self.accent_color = settings.get('accent_color', "#1976d2")
+			self.manual_accent_color = self.accent_color
 			self.update_accent_icon()
+
+			# Restore dynamic accent color state
+			self.dynamic_accent_color_enabled = settings.get('dynamic_accent_color_enabled', False)
 
 			# Restore slider widths and play button size
 			slider_min = settings.get('progress_slider_min_width')
@@ -2259,12 +2385,128 @@ class MusicPlayer(QMainWindow):
 		self.accent_btn.setIcon(QIcon(pixmap))
 
 	def choose_accent_color(self):
-		dialog = ColorPickerDialog(self, self.accent_color)
+		dialog = ColorPickerDialog(self, self.manual_accent_color, self.dynamic_accent_color_enabled, self.detected_dynamic_color, self.dark_mode)
+		# Connect real-time updates while dialog is open
+		self.dynamic_color_updated.connect(dialog.update_dynamic_color)
+		
 		if dialog.exec():
-			self.accent_color = dialog.get_color()
+			self.manual_accent_color = dialog.get_color()
+			self.dynamic_accent_color_enabled = dialog.get_dynamic_enabled()
+			
+			if self.dynamic_accent_color_enabled:
+				# Trigger an update immediately
+				self.update_album_art()
+			else:
+				# Restore the manually chosen accent color (which is blue if they just unchecked dynamic)
+				self.accent_color = self.manual_accent_color
+				self.update_accent_icon()
+				self.apply_theme()
+
+		# Disconnect to avoid memory leaks/stale references
+		self.dynamic_color_updated.disconnect(dialog.update_dynamic_color)
+		self.save_settings()
+
+	def extract_vibrant_color(self, image):
+		if image.isNull():
+			return None
+
+		# Scale down for faster processing and automatic averaging of some noise
+		small_image = image.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation)
+
+		color_counts = {}
+		max_count = 0
+		best_color = None
+
+		for y in range(small_image.height()):
+			for x in range(small_image.width()):
+				pixel = small_image.pixelColor(x, y)
+				# Ignore very dark/black areas (Value < 50) and very desaturated/gray areas (Saturation < 50)
+				# Also ignore very bright/white areas (Value > 240 and Saturation < 30)
+				h, s, v, a = pixel.getHsv()
+
+				if v > 50 and s > 50 and not (v > 240 and s < 30):
+					# Simplify color space to group similar colors (round Hue to nearest 10)
+					rounded_h = (h // 10) * 10
+					# Also round S and V slightly
+					rounded_s = (s // 20) * 20
+					rounded_v = (v // 20) * 20
+					key = (rounded_h, rounded_s, rounded_v)
+
+					color_counts[key] = color_counts.get(key, 0) + 1
+					if color_counts[key] > max_count:
+						max_count = color_counts[key]
+						best_color = pixel
+
+		return best_color
+
+	def update_album_art(self):
+		# We always need to know if we have art, even if the label is hidden, for dynamic accent color
+		source = self.player.source().toLocalFile()
+		artwork_found = False
+		pixmap = None
+
+		if source and Path(source).exists():
+			from mutagen import File
+			try:
+				audio = File(source)
+				artwork_data = None
+
+				if audio:
+					if hasattr(audio, 'tags') and audio.tags:
+						for key in audio.tags.keys():
+							if key.startswith('APIC'):
+								artwork_data = audio.tags[key].data
+								break
+					if not artwork_data and 'APIC:' in audio:
+						artwork_data = audio['APIC:'].data
+					elif not artwork_data and hasattr(audio, 'pictures') and audio.pictures:
+						artwork_data = audio.pictures[0].data
+					elif not artwork_data and 'covr' in audio:
+						artwork_data = audio['covr'][0]
+
+				if artwork_data:
+					pixmap = QPixmap()
+					pixmap.loadFromData(artwork_data)
+					artwork_found = True
+			except Exception as e:
+				print(f"Error loading album art: {e}")
+
+		if artwork_found and pixmap:
+			vibrant = self.extract_vibrant_color(pixmap.toImage())
+			if vibrant:
+				self.detected_dynamic_color = vibrant.name()
+				self.dynamic_color_updated.emit(self.detected_dynamic_color)
+
+		# Handle Dynamic Accent Color
+		if self.dynamic_accent_color_enabled:
+			if artwork_found and pixmap:
+				if vibrant:
+					self.accent_color = self.detected_dynamic_color
+					self.update_accent_icon()
+					self.apply_theme()
+				else:
+					# Fallback to manual color if extraction fails or art is too "boring"
+					self.restore_manual_accent_color()
+			else:
+				# Fallback to manual color if no art
+				self.restore_manual_accent_color()
+
+		# Update UI Label if visible
+		if self.show_album_art:
+			if artwork_found and pixmap:
+				self.album_art_label.setPixmap(pixmap)
+			else:
+				self.album_art_label.clear()
+				if not source:
+					self.album_art_label.setText("No track playing")
+				else:
+					self.album_art_label.setText("No artwork found")
+
+	def restore_manual_accent_color(self):
+		if self.accent_color != self.manual_accent_color:
+			self.accent_color = self.manual_accent_color
 			self.update_accent_icon()
 			self.apply_theme()
-			self.save_settings()
 
 	def show_lyrics(self):
 		# Toggle back to library if already showing lyrics
@@ -2804,49 +3046,6 @@ class MusicPlayer(QMainWindow):
 
 		self.art_anim.start()
 		self.save_settings()
-
-	def update_album_art(self):
-		if not self.show_album_art:
-			return
-
-		source = self.player.source().toLocalFile()
-		if not source or not Path(source).exists():
-			self.album_art_label.clear()
-			self.album_art_label.setText("No track playing")
-			return
-
-		from mutagen import File
-		try:
-			audio = File(source)
-			artwork = None
-
-			if audio:
-				# Handle different tag formats
-				if hasattr(audio, 'tags') and audio.tags:
-					# Try APIC for ID3
-					for key in audio.tags.keys():
-						if key.startswith('APIC'):
-							artwork = audio.tags[key].data
-							break
-
-				if not artwork and 'APIC:' in audio: # ID3 (MP3) fallback
-					artwork = audio['APIC:'].data
-				elif not artwork and audio.pictures: # FLAC
-					artwork = audio.pictures[0].data
-				elif not artwork and 'covr' in audio: # MP4/M4A
-					artwork = audio['covr'][0]
-
-			if artwork:
-				pixmap = QPixmap()
-				pixmap.loadFromData(artwork)
-				self.album_art_label.setPixmap(pixmap)
-			else:
-				self.album_art_label.clear()
-				self.album_art_label.setText("No artwork found")
-		except Exception as e:
-			print(f"Error loading album art: {e}")
-			self.album_art_label.clear()
-			self.album_art_label.setText("Missing Album Art")
 
 	def restore_playback_position(self):
 		if not self.remember_position or not self.playback_position_file.exists():
