@@ -1633,6 +1633,10 @@ class MusicPlayer(QMainWindow):
 				# Remove minimum width constraint temporarily
 				self.left_container.setMinimumWidth(0)
 
+				# Adjust progress slider width for mini mode
+				self.progress_slider.setMinimumWidth(200)
+				self.progress_slider.setMaximumWidth(350)
+
 				# Set fixed size for mini mode
 				self.setFixedSize(400, 107)
 
@@ -2928,6 +2932,10 @@ class MusicPlayer(QMainWindow):
 			# Remove minimum width constraint temporarily
 			self.left_container.setMinimumWidth(0)
 
+			# Adjust progress slider width for mini mode
+			self.progress_slider.setMinimumWidth(200)
+			self.progress_slider.setMaximumWidth(350)
+
 			# Set fixed size for mini mode
 			self.setFixedSize(400, 107)
 
@@ -2954,6 +2962,10 @@ class MusicPlayer(QMainWindow):
 
 			# Restore minimum width constraint
 			self.left_container.setMinimumWidth(200)
+
+			# Restore progress slider width
+			self.progress_slider.setMinimumWidth(600)
+			self.progress_slider.setMaximumWidth(950)
 
 			self.shrink_expand_btn.setIcon(self.load_icon('shrink.svg', icon_color))
 			self.shrink_expand_btn.setToolTip("Shrink the Interface")
