@@ -709,8 +709,8 @@ class MusicPlayer(QMainWindow):
 
 		self.setWindowTitle("Buzzkill Music Player")
 
-		# Default size (will be overridden by load_settings if saved geometry exists)
-		self.setGeometry(100, 100, 1200, 720)
+		# Default size
+		self.resize(1200, 720)
 
 		# Music library structure: {genre: {artist: {album: [songs]}}}
 		self.library = {}
@@ -780,6 +780,17 @@ class MusicPlayer(QMainWindow):
 
 		self.load_settings()
 		self.restore_playback_position()
+		self.center_window()
+
+	def center_window(self):
+		"""Centers the window on the current screen."""
+		primary_screen = QApplication.primaryScreen()
+		if primary_screen:
+			screen_geometry = primary_screen.availableGeometry()
+			window_geometry = self.frameGeometry()
+			center_point = screen_geometry.center()
+			window_geometry.moveCenter(center_point)
+			self.move(window_geometry.topLeft())
 
 	def init_ui(self):
 		# Main widget and layout
@@ -1689,7 +1700,7 @@ class MusicPlayer(QMainWindow):
 			window_geometry = settings.get('window_geometry')
 			if window_geometry:
 				x, y, width, height = window_geometry
-				self.setGeometry(x, y, width, height)
+				self.resize(width, height)
 
 			# Restore maximized state
 			window_maximized = settings.get('window_maximized', False)
@@ -2971,8 +2982,9 @@ class MusicPlayer(QMainWindow):
 		if event.type() == event.Type.WindowStateChange:
 			# Check if we just un-maximized
 			if not self.isMaximized() and event.oldState() == Qt.WindowState.WindowMaximized:
-				# Restore to default size instead of previous size
-				self.setGeometry(100, 100, 1200, 720)
+				# Restore to default size and center
+				self.resize(1200, 720)
+				self.center_window()
 
 		super().changeEvent(event)
 

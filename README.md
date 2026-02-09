@@ -48,4 +48,4 @@ Unicons by [Flaticon](https://www.flaticon.com/uicons).
 
 
 ## AI Disclaimer
-100% of this application was vibe coded. I am not a programmer. The only reason I started this project was because I couldn't find a suitable alternative for MusicBee on Linux. So, if my application gains sentience and takes over the world, I do apologize. Stay safe out there.
+100% of this application was made with assistance from an AI agent. I am not a programmer. The only reason I started this project was because I couldn't find a suitable alternative for MusicBee on Linux. So, if the app gains sentience and takes over the world, I do apologize. Stay safe out there, fellow humans.
