@@ -336,8 +336,17 @@ class LibraryFoldersDialog(QDialog):
 		buttons.addWidget(cancel_btn)
 		layout.addLayout(buttons)
 
+	def changeEvent(self, event):
+		from PyQt6.QtCore import QEvent
+		if event.type() == QEvent.Type.ActivationChange:
+			if not self.isActiveWindow() and not getattr(self, '_opening_dialog', False):
+				self.reject()
+		super().changeEvent(event)
+
 	def add_folder(self):
+		self._opening_dialog = True
 		folder = QFileDialog.getExistingDirectory(self, "Select Music Folder")
+		self._opening_dialog = False
 		if folder and folder not in self.watched_folders:
 			self.watched_folders.append(folder)
 			self.list_widget.addItem(folder)
@@ -1176,11 +1185,14 @@ class MusicPlayer(QMainWindow):
 		self.statusBar().showMessage("Ready")
 
 	def add_folder(self):
-		dialog = LibraryFoldersDialog(self.watched_folders, self)
-		if dialog.exec():
-			self.watched_folders = dialog.get_folders()
-			self.save_library()
-			self.rescan_library()
+		self.library_dialog = LibraryFoldersDialog(self.watched_folders, self)
+		self.library_dialog.accepted.connect(self.on_library_dialog_accepted)
+		self.library_dialog.show()
+
+	def on_library_dialog_accepted(self):
+		self.watched_folders = self.library_dialog.get_folders()
+		self.save_library()
+		self.rescan_library()
 
 	def load_library(self):
 		if not self.library_file.exists():
