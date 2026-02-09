@@ -1514,6 +1514,9 @@ class MusicPlayer(QMainWindow):
 			'accent_color': self.accent_color,
 			'show_album_art': self.show_album_art,
 			'is_shrunk': self.is_shrunk,
+			'progress_slider_min_width': self.progress_slider.minimumWidth(),
+			'progress_slider_max_width': self.progress_slider.maximumWidth(),
+			'play_btn_icon_size': [self.play_btn.iconSize().width(), self.play_btn.iconSize().height()],
 			'expanded_geometry': [
 				self.expanded_geometry.x(),
 				self.expanded_geometry.y(),
@@ -1578,6 +1581,16 @@ class MusicPlayer(QMainWindow):
 			# Restore accent color
 			self.accent_color = settings.get('accent_color', "#1976d2")
 			self.update_accent_icon()
+
+			# Restore slider widths and play button size
+			slider_min = settings.get('progress_slider_min_width')
+			slider_max = settings.get('progress_slider_max_width')
+			if slider_min: self.progress_slider.setMinimumWidth(slider_min)
+			if slider_max: self.progress_slider.setMaximumWidth(slider_max)
+
+			play_icon_size = settings.get('play_btn_icon_size')
+			if play_icon_size:
+				self.play_btn.setIconSize(QSize(*play_icon_size))
 
 			# Restore repeat mode
 			self.repeat_mode = settings.get('repeat_mode', 0)
@@ -2953,6 +2966,9 @@ class MusicPlayer(QMainWindow):
 			self.progress_slider.setMinimumWidth(200)
 			self.progress_slider.setMaximumWidth(350)
 
+			# Adjust play button size for mini mode
+			self.play_btn.setIconSize(QSize(20, 20))
+
 			# Set fixed size for mini mode
 			self.setFixedSize(400, 107)
 
@@ -2983,6 +2999,9 @@ class MusicPlayer(QMainWindow):
 			# Restore progress slider width
 			self.progress_slider.setMinimumWidth(600)
 			self.progress_slider.setMaximumWidth(950)
+
+			# Restore play button size
+			self.play_btn.setIconSize(QSize(36, 36))
 
 			self.shrink_expand_btn.setIcon(self.load_icon('shrink.svg', icon_color))
 			self.shrink_expand_btn.setToolTip("Shrink the Interface")
