@@ -163,6 +163,13 @@ class ColorPickerDialog(QDialog):
 		# Now that everything is created, update preview and styles
 		self.update_preview()
 
+	def changeEvent(self, event):
+		from PyQt6.QtCore import QEvent
+		if event.type() == QEvent.Type.ActivationChange:
+			if not self.isActiveWindow():
+				self.reject()
+		super().changeEvent(event)
+
 	def on_dynamic_toggled(self, checked):
 		# Block signals to avoid partial color updates while setting RGB sliders
 		# which would corrupt last_manual_color
@@ -2407,24 +2414,27 @@ class MusicPlayer(QMainWindow):
 			return QIcon(str(icon_path))
 
 	def choose_accent_color(self):
-		dialog = ColorPickerDialog(self, self.manual_accent_color, self.dynamic_accent_color_enabled, self.detected_dynamic_color, self.dark_mode)
+		self.accent_dialog = ColorPickerDialog(self, self.manual_accent_color, self.dynamic_accent_color_enabled, self.detected_dynamic_color, self.dark_mode)
 		# Connect real-time updates while dialog is open
-		self.dynamic_color_updated.connect(dialog.update_dynamic_color)
-		
-		if dialog.exec():
-			self.manual_accent_color = dialog.get_color()
-			self.dynamic_accent_color_enabled = dialog.get_dynamic_enabled()
-			
-			if self.dynamic_accent_color_enabled:
-				# Trigger an update immediately
-				self.update_album_art()
-			else:
-				# Restore the manually chosen accent color (which is blue if they just unchecked dynamic)
-				self.accent_color = self.manual_accent_color
-				self.apply_theme()
+		self.dynamic_color_updated.connect(self.accent_dialog.update_dynamic_color)
+		self.accent_dialog.accepted.connect(self.on_accent_dialog_accepted)
+		# Also disconnect on rejection (close without saving)
+		self.accent_dialog.rejected.connect(lambda: self.dynamic_color_updated.disconnect(self.accent_dialog.update_dynamic_color))
+		self.accent_dialog.show()
 
-		# Disconnect to avoid memory leaks/stale references
-		self.dynamic_color_updated.disconnect(dialog.update_dynamic_color)
+	def on_accent_dialog_accepted(self):
+		self.dynamic_color_updated.disconnect(self.accent_dialog.update_dynamic_color)
+		self.manual_accent_color = self.accent_dialog.get_color()
+		self.dynamic_accent_color_enabled = self.accent_dialog.get_dynamic_enabled()
+		
+		if self.dynamic_accent_color_enabled:
+			# Trigger an update immediately
+			self.update_album_art()
+		else:
+			# Restore the manually chosen accent color
+			self.accent_color = self.manual_accent_color
+			self.apply_theme()
+
 		self.save_settings()
 
 	def extract_vibrant_color(self, image):
