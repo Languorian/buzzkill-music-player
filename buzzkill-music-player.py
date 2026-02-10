@@ -11,7 +11,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
 							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
 							 QStatusBar, QListWidget, QListWidgetItem, QMenu,
-							 QStackedWidget, QTextEdit, QGraphicsOpacityEffect, QCheckBox)
+							 QStackedWidget, QTextEdit, QGraphicsOpacityEffect, QCheckBox,
+							 QProgressBar)
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
 from PyQt6.QtCore import (Qt, QUrl, QSize, QRect, QThread, pyqtSignal, 
 						  QPropertyAnimation, QEasingCurve, QVariantAnimation)
@@ -1224,9 +1225,29 @@ class MusicPlayer(QMainWindow):
 		# Status Bar
 		self.setStatusBar(QStatusBar())
 		self.statusBar().setSizeGripEnabled(False)
+		
+		# Container for throbber and label to keep them centered together
+		status_container = QWidget()
+		status_layout = QHBoxLayout(status_container)
+		status_layout.setContentsMargins(0, 0, 0, 0)
+		status_layout.setSpacing(8)
+
+		# Throbber for loading/scanning
+		self.throbber = QProgressBar()
+		self.throbber.setRange(0, 0)
+		self.throbber.setFixedWidth(40)
+		self.throbber.setFixedHeight(8)
+		self.throbber.setTextVisible(False)
+		self.throbber.hide()
+
 		self.status_label = QLabel("Ready")
-		self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-		self.statusBar().addWidget(self.status_label, 1)
+		
+		status_layout.addStretch(1)
+		status_layout.addWidget(self.throbber)
+		status_layout.addWidget(self.status_label)
+		status_layout.addStretch(1)
+		
+		self.statusBar().addWidget(status_container, 1)
 
 	def show_status_message(self, message, timeout=0):
 		self.status_label.setText(message)
@@ -1926,6 +1947,9 @@ class MusicPlayer(QMainWindow):
 		self.add_folder_btn.setEnabled(False)
 		self.rescan_btn.setToolTip("Scanning library in background...")
 		self.show_status_message("Scanning library...")
+		
+		# Show throbber
+		self.throbber.show()
 
 		# Create and start the background scanner
 		self.scanner = LibraryScanner(self.watched_folders)
@@ -1937,6 +1961,9 @@ class MusicPlayer(QMainWindow):
 		self.rescan_btn.setEnabled(True)
 		self.add_folder_btn.setEnabled(True)
 		self.rescan_btn.setToolTip("Rescan library for new files")
+		
+		# Hide throbber
+		self.throbber.hide()
 
 		# Update library and refresh UI
 		if new_library:
