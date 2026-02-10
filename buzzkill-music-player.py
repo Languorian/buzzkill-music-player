@@ -122,6 +122,7 @@ class ColorPickerDialog(QDialog):
 		self.r_slider = self.create_slider("R", self.color.red(), layout)
 		self.g_slider = self.create_slider("G", self.color.green(), layout)
 		self.b_slider = self.create_slider("B", self.color.blue(), layout)
+		self.s_slider = self.create_slider("S", self.color.hsvSaturation(), layout)
 
 		# HEX Input
 		hex_layout = QHBoxLayout()
@@ -143,6 +144,7 @@ class ColorPickerDialog(QDialog):
 		self.r_slider.setEnabled(not dynamic_enabled)
 		self.g_slider.setEnabled(not dynamic_enabled)
 		self.b_slider.setEnabled(not dynamic_enabled)
+		self.s_slider.setEnabled(not dynamic_enabled)
 		self.hex_input.setEnabled(not dynamic_enabled)
 
 		# Buttons
@@ -176,10 +178,12 @@ class ColorPickerDialog(QDialog):
 		self.r_slider.blockSignals(True)
 		self.g_slider.blockSignals(True)
 		self.b_slider.blockSignals(True)
+		self.s_slider.blockSignals(True)
 
 		self.r_slider.setEnabled(not checked)
 		self.g_slider.setEnabled(not checked)
 		self.b_slider.setEnabled(not checked)
+		self.s_slider.setEnabled(not checked)
 		self.hex_input.setEnabled(not checked)
 		self.default_btn.setEnabled(not checked)
 		
@@ -189,15 +193,18 @@ class ColorPickerDialog(QDialog):
 			self.r_slider.setValue(color.red())
 			self.g_slider.setValue(color.green())
 			self.b_slider.setValue(color.blue())
+			self.s_slider.setValue(color.hsvSaturation())
 		else:
 			# Restore to last used manual color
 			self.r_slider.setValue(self.last_manual_color.red())
 			self.g_slider.setValue(self.last_manual_color.green())
 			self.b_slider.setValue(self.last_manual_color.blue())
+			self.s_slider.setValue(self.last_manual_color.hsvSaturation())
 
 		self.r_slider.blockSignals(False)
 		self.g_slider.blockSignals(False)
 		self.b_slider.blockSignals(False)
+		self.s_slider.blockSignals(False)
 
 		# Manually trigger one update to sync self.color and preview
 		self.on_slider_changed()
@@ -252,9 +259,30 @@ class ColorPickerDialog(QDialog):
 		self.r_slider.setStyleSheet(slider_style)
 		self.g_slider.setStyleSheet(slider_style)
 		self.b_slider.setStyleSheet(slider_style)
+		self.s_slider.setStyleSheet(slider_style)
 
 	def on_slider_changed(self):
-		self.color = QColor(self.r_slider.value(), self.g_slider.value(), self.b_slider.value())
+		sender = self.sender()
+		if sender == self.s_slider:
+			h = self.color.hsvHue()
+			s = self.s_slider.value()
+			v = self.color.value()
+			self.color.setHsv(h, s, v)
+			
+			self.r_slider.blockSignals(True)
+			self.g_slider.blockSignals(True)
+			self.b_slider.blockSignals(True)
+			self.r_slider.setValue(self.color.red())
+			self.g_slider.setValue(self.color.green())
+			self.b_slider.setValue(self.color.blue())
+			self.r_slider.blockSignals(False)
+			self.g_slider.blockSignals(False)
+			self.b_slider.blockSignals(False)
+		else:
+			self.color = QColor(self.r_slider.value(), self.g_slider.value(), self.b_slider.value())
+			self.s_slider.blockSignals(True)
+			self.s_slider.setValue(self.color.hsvSaturation())
+			self.s_slider.blockSignals(False)
 		
 		# Keep track of the last manual color choice
 		if not self.dynamic_checkbox.isChecked():
@@ -276,12 +304,15 @@ class ColorPickerDialog(QDialog):
 			self.r_slider.blockSignals(True)
 			self.g_slider.blockSignals(True)
 			self.b_slider.blockSignals(True)
+			self.s_slider.blockSignals(True)
 			self.r_slider.setValue(self.color.red())
 			self.g_slider.setValue(self.color.green())
 			self.b_slider.setValue(self.color.blue())
+			self.s_slider.setValue(self.color.hsvSaturation())
 			self.r_slider.blockSignals(False)
 			self.g_slider.blockSignals(False)
 			self.b_slider.blockSignals(False)
+			self.s_slider.blockSignals(False)
 			self.update_preview()
 
 	def get_color(self):
@@ -297,12 +328,15 @@ class ColorPickerDialog(QDialog):
 			self.r_slider.blockSignals(True)
 			self.g_slider.blockSignals(True)
 			self.b_slider.blockSignals(True)
+			self.s_slider.blockSignals(True)
 			self.r_slider.setValue(color.red())
 			self.g_slider.setValue(color.green())
 			self.b_slider.setValue(color.blue())
+			self.s_slider.setValue(color.hsvSaturation())
 			self.r_slider.blockSignals(False)
 			self.g_slider.blockSignals(False)
 			self.b_slider.blockSignals(False)
+			self.s_slider.blockSignals(False)
 			self.on_slider_changed()
 
 class LibraryFoldersDialog(QDialog):
