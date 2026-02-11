@@ -930,16 +930,6 @@ class MusicPlayer(QMainWindow):
 		self.darkmode_btn.clicked.connect(self.toggle_theme)
 		left_controls.addWidget(self.darkmode_btn)
 
-		# Shrink/Expand button
-		self.shrink_expand_btn = QPushButton()
-		icon_color = 'white' if self.dark_mode else 'black'
-		self.shrink_expand_btn.setIcon(self.load_icon('shrink.svg', icon_color))
-		self.shrink_expand_btn.setIconSize(self.icon_size)
-		self.shrink_expand_btn.setToolTip("Shrink/Expand the Interface")
-		self.shrink_expand_btn.setFlat(True)
-		self.shrink_expand_btn.clicked.connect(self.shrink_and_expand)
-		left_controls.addWidget(self.shrink_expand_btn)
-
 		# Accent Color button
 		self.accent_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
@@ -949,6 +939,16 @@ class MusicPlayer(QMainWindow):
 		self.accent_btn.setFlat(True)
 		self.accent_btn.clicked.connect(self.choose_accent_color)
 		left_controls.addWidget(self.accent_btn)
+
+		# Shrink/Expand button
+		self.shrink_expand_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.shrink_expand_btn.setIcon(self.load_icon('shrink.svg', icon_color))
+		self.shrink_expand_btn.setIconSize(self.icon_size)
+		self.shrink_expand_btn.setToolTip("Shrink/Expand the Interface")
+		self.shrink_expand_btn.setFlat(True)
+		self.shrink_expand_btn.clicked.connect(self.shrink_and_expand)
+		left_controls.addWidget(self.shrink_expand_btn)
 
 		# ===========================
 		# 2. CENTER SECTION
@@ -2269,6 +2269,25 @@ class MusicPlayer(QMainWindow):
 			self.song_table.setRowCount(0)
 			self.song_table.setSortingEnabled(False)
 
+			is_single_album_playlist = True
+			if self.current_playlist:
+				first_song = self.current_playlist[0]
+				# Ensure first_song is a dict for consistent access
+				if not isinstance(first_song, dict): # Fallback for old format
+					is_single_album_playlist = False # Cannot determine, so assume multi-album
+				else:
+					first_album = first_song.get('album')
+					first_artist = first_song.get('artist')
+					if not first_album or not first_artist:
+						is_single_album_playlist = False # Missing metadata, can't confirm single album
+					else:
+						for song in self.current_playlist:
+							if not isinstance(song, dict) or song.get('album') != first_album or song.get('artist') != first_artist:
+								is_single_album_playlist = False
+								break
+			else:
+				is_single_album_playlist = False # Empty playlist isn't single album
+
 			for i, song in enumerate(self.current_playlist):
 				self.song_table.insertRow(i)
 
@@ -2294,17 +2313,23 @@ class MusicPlayer(QMainWindow):
 					duration = 0
 
 				# Track number processing
-				track_num_display = str(track_num_raw).strip()
-				if '/' in track_num_display:
-					track_num_display = track_num_display.split('/')[0]
+				# Apply sequential numbering if it's a multi-album playlist
+				if not is_single_album_playlist:
+					track_num_display = str(i + 1)
+					track_num_sort = i + 1 # For sorting, use sequential
+				else:
+					# Use metadata track number
+					track_num_display = str(track_num_raw).strip()
+					if '/' in track_num_display:
+						track_num_display = track_num_display.split('/')[0]
 
-				if track_num_display == '0' or track_num_display == '00' or not track_num_display:
-					track_num_display = ""
-
-				try:
-					track_num_sort = int(track_num_display) if track_num_display else 999
-				except:
-					track_num_sort = 999
+					if track_num_display == '0' or track_num_display == '00' or not track_num_display:
+						track_num_display = ""
+					
+					try:
+						track_num_sort = int(track_num_display) if track_num_display else 999
+					except ValueError:
+						track_num_sort = 999
 
 				# Year processing
 				if '-' in str(year_raw):
