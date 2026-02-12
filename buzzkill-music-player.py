@@ -133,10 +133,10 @@ class LibraryDatabase:
 		if album and not album.startswith("All Albums"):
 			query += ' AND album=?'
 			params.append(album)
-		
+
 		cursor.execute(query, params)
 		return [dict(row) for row in cursor.fetchall()]
-	
+
 	def search(self, query_str):
 		cursor = self.conn.cursor()
 		query_str = f"%{query_str}%"
@@ -147,7 +147,7 @@ class LibraryDatabase:
 		self.conn.close()
 
 class LibraryScanner(QThread):
-	finished = pyqtSignal(dict) 
+	finished = pyqtSignal(dict)
 
 	def __init__(self, db_path, watched_folders):
 		super().__init__()
@@ -157,10 +157,10 @@ class LibraryScanner(QThread):
 	def run(self):
 		conn = sqlite3.connect(self.db_path)
 		cursor = conn.cursor()
-		
+
 		# Full rescan: clear existing songs
 		cursor.execute('DELETE FROM songs')
-		
+
 		audio_extensions = {'.mp3', '.flac', '.ogg', '.wav', '.m4a', '.wma'}
 
 		for folder_path in self.watched_folders:
@@ -191,13 +191,13 @@ class LibraryScanner(QThread):
 							duration = audio.info.length if hasattr(audio, 'info') else 0
 
 							cursor.execute('''
-								INSERT OR REPLACE INTO songs (path, title, artist, album, genre, tracknumber, year, duration) 
+								INSERT OR REPLACE INTO songs (path, title, artist, album, genre, tracknumber, year, duration)
 								VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 							''', (full_path, title, artist, album, genre, track_num, year, duration))
 
 						except:
 							continue
-		
+
 		conn.commit()
 		conn.close()
 		self.finished.emit({})
@@ -810,7 +810,7 @@ class SearchDialog(QDialog):
 
 		# Search in database
 		found_songs = self.db.search(query)
-		
+
 		found_artists = set()
 		found_albums = set() # (album_name, artist_name)
 
@@ -898,7 +898,7 @@ class MusicPlayer(QMainWindow):
 		self.repeat_mode = 0	# 0=off, 1=song, 2=album
 		self.shuffle_enabled = False
 		self.unshuffled_playlist = []
-		self.remember_position = False
+		self.remember_position = True
 		self.accent_color = "#0E47A1"
 		self.manual_accent_color = "#0E47A1"
 		self.dynamic_accent_color_enabled = False
@@ -1360,15 +1360,15 @@ class MusicPlayer(QMainWindow):
 		try:
 			with open(self.library_file, 'r') as f:
 				data = json.load(f)
-			
+
 			watched_folders = data.get('watched_folders', [])
 			self.db.set_folders(watched_folders)
-			
+
 			library = data.get('library', {})
-			
+
 			conn = self.db.conn
 			cursor = conn.cursor()
-			
+
 			count = 0
 			for genre, artists in library.items():
 				for artist, albums in artists.items():
@@ -1376,7 +1376,7 @@ class MusicPlayer(QMainWindow):
 						for song in songs:
 							if isinstance(song, dict):
 								cursor.execute('''
-									INSERT OR IGNORE INTO songs (path, title, artist, album, genre, tracknumber, year, duration) 
+									INSERT OR IGNORE INTO songs (path, title, artist, album, genre, tracknumber, year, duration)
 									VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 								''', (
 									song.get('path'),
@@ -1389,13 +1389,13 @@ class MusicPlayer(QMainWindow):
 									song.get('duration')
 								))
 								count += 1
-			
+
 			conn.commit()
 			print(f"Migrated {count} songs to database.")
-			
+
 			# Rename old json file
 			self.library_file.rename(self.config_dir / 'library.json.bak')
-			
+
 		except Exception as e:
 			print(f"Migration failed: {e}")
 			traceback.print_exc()
@@ -2168,14 +2168,14 @@ class MusicPlayer(QMainWindow):
 				first_album = first_song.get('album')
 				first_artist = first_song.get('artist')
 				if not first_album or not first_artist:
-					is_single_album_playlist = False 
+					is_single_album_playlist = False
 				else:
 					for song in self.current_playlist:
 						if song.get('album') != first_album or song.get('artist') != first_artist:
 							is_single_album_playlist = False
 							break
 			else:
-				is_single_album_playlist = False 
+				is_single_album_playlist = False
 
 			for i, song in enumerate(self.current_playlist):
 				self.song_table.insertRow(i)
@@ -2193,7 +2193,7 @@ class MusicPlayer(QMainWindow):
 				# Track number processing
 				if not is_single_album_playlist:
 					track_num_display = str(i + 1)
-					track_num_sort = i + 1 
+					track_num_sort = i + 1
 				else:
 					# Use metadata track number
 					track_num_display = str(track_num_raw).strip()
