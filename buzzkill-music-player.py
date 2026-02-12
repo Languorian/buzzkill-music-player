@@ -3,6 +3,7 @@ import json
 import os
 import re
 import random
+import sqlite3
 import sys
 import traceback
 from pathlib import Path
@@ -48,15 +49,118 @@ class ClickableSlider(QSlider):
 		self.scrolled.emit(event.angleDelta().y())
 		event.accept()
 
-class LibraryScanner(QThread):
-	finished = pyqtSignal(dict)
+class LibraryDatabase:
+	def __init__(self, db_path):
+		self.db_path = str(db_path)
+		self.conn = sqlite3.connect(self.db_path)
+		self.conn.row_factory = sqlite3.Row
+		self.create_tables()
 
-	def __init__(self, watched_folders):
+	def create_tables(self):
+		cursor = self.conn.cursor()
+		cursor.execute('''
+			CREATE TABLE IF NOT EXISTS songs (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				path TEXT UNIQUE,
+				title TEXT,
+				artist TEXT,
+				album TEXT,
+				genre TEXT,
+				tracknumber TEXT,
+				year TEXT,
+				duration INTEGER
+			)
+		''')
+		cursor.execute('''
+			CREATE TABLE IF NOT EXISTS folders (
+				path TEXT PRIMARY KEY
+			)
+		''')
+		# Indices for performance
+		cursor.execute('CREATE INDEX IF NOT EXISTS idx_genre ON songs(genre)')
+		cursor.execute('CREATE INDEX IF NOT EXISTS idx_artist ON songs(artist)')
+		cursor.execute('CREATE INDEX IF NOT EXISTS idx_album ON songs(album)')
+		self.conn.commit()
+
+	def get_folders(self):
+		cursor = self.conn.cursor()
+		cursor.execute('SELECT path FROM folders')
+		return [row['path'] for row in cursor.fetchall()]
+
+	def set_folders(self, folders):
+		cursor = self.conn.cursor()
+		cursor.execute('DELETE FROM folders')
+		cursor.executemany('INSERT INTO folders (path) VALUES (?)', [(f,) for f in folders])
+		self.conn.commit()
+
+	def get_genres(self):
+		cursor = self.conn.cursor()
+		cursor.execute('SELECT DISTINCT genre FROM songs ORDER BY genre')
+		return [row['genre'] for row in cursor.fetchall()]
+
+	def get_artists(self, genre=None):
+		cursor = self.conn.cursor()
+		if genre and not genre.startswith("All Genres"):
+			cursor.execute('SELECT DISTINCT artist FROM songs WHERE genre=? ORDER BY artist', (genre,))
+		else:
+			cursor.execute('SELECT DISTINCT artist FROM songs ORDER BY artist')
+		return [row['artist'] for row in cursor.fetchall()]
+
+	def get_albums(self, genre=None, artist=None):
+		cursor = self.conn.cursor()
+		query = 'SELECT DISTINCT album FROM songs WHERE 1=1'
+		params = []
+		if genre and not genre.startswith("All Genres"):
+			query += ' AND genre=?'
+			params.append(genre)
+		if artist and not artist.startswith("All Artists"):
+			query += ' AND artist=?'
+			params.append(artist)
+		query += ' ORDER BY album'
+		cursor.execute(query, params)
+		return [row['album'] for row in cursor.fetchall()]
+
+	def get_songs(self, genre=None, artist=None, album=None):
+		cursor = self.conn.cursor()
+		query = 'SELECT * FROM songs WHERE 1=1'
+		params = []
+		if genre and not genre.startswith("All Genres"):
+			query += ' AND genre=?'
+			params.append(genre)
+		if artist and not artist.startswith("All Artists"):
+			query += ' AND artist=?'
+			params.append(artist)
+		if album and not album.startswith("All Albums"):
+			query += ' AND album=?'
+			params.append(album)
+		
+		cursor.execute(query, params)
+		return [dict(row) for row in cursor.fetchall()]
+	
+	def search(self, query_str):
+		cursor = self.conn.cursor()
+		query_str = f"%{query_str}%"
+		cursor.execute("SELECT * FROM songs WHERE title LIKE ? OR artist LIKE ? OR album LIKE ?", (query_str, query_str, query_str))
+		return [dict(row) for row in cursor.fetchall()]
+
+	def close(self):
+		self.conn.close()
+
+class LibraryScanner(QThread):
+	finished = pyqtSignal(dict) 
+
+	def __init__(self, db_path, watched_folders):
 		super().__init__()
+		self.db_path = str(db_path)
 		self.watched_folders = watched_folders
 
 	def run(self):
-		new_library = {}
+		conn = sqlite3.connect(self.db_path)
+		cursor = conn.cursor()
+		
+		# Full rescan: clear existing songs
+		cursor.execute('DELETE FROM songs')
+		
 		audio_extensions = {'.mp3', '.flac', '.ogg', '.wav', '.m4a', '.wma'}
 
 		for folder_path in self.watched_folders:
@@ -86,31 +190,17 @@ class LibraryScanner(QThread):
 							year = audio.get('date', [''])[0] if audio.get('date') else ''
 							duration = audio.info.length if hasattr(audio, 'info') else 0
 
-							song_data = {
-								'path': full_path,
-								'title': title,
-								'artist': artist,
-								'album': album,
-								'genre': genre,
-								'tracknumber': track_num,
-								'year': year,
-								'duration': duration
-							}
-
-							# Build library structure
-							if genre not in new_library:
-								new_library[genre] = {}
-							if artist not in new_library[genre]:
-								new_library[genre][artist] = {}
-							if album not in new_library[genre][artist]:
-								new_library[genre][artist][album] = []
-
-							new_library[genre][artist][album].append(song_data)
+							cursor.execute('''
+								INSERT OR REPLACE INTO songs (path, title, artist, album, genre, tracknumber, year, duration) 
+								VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+							''', (full_path, title, artist, album, genre, track_num, year, duration))
 
 						except:
 							continue
-
-		self.finished.emit(new_library)
+		
+		conn.commit()
+		conn.close()
+		self.finished.emit({})
 
 class ColorPickerDialog(QDialog):
 	def __init__(self, parent=None, initial_color="#0E47A1", dynamic_enabled=False, dynamic_color="#0E47A1", dark_mode=True):
@@ -645,9 +735,9 @@ class EditMetadataDialog(QDialog):
 class SearchDialog(QDialog):
 	result_selected = pyqtSignal(dict)
 
-	def __init__(self, library, parent=None):
+	def __init__(self, db, parent=None):
 		super().__init__(parent)
-		self.library = library
+		self.db = db
 		self.setWindowTitle("Search Library")
 		self.setMinimumSize(600, 450)
 
@@ -716,24 +806,17 @@ class SearchDialog(QDialog):
 			self.songs_root.setHidden(True)
 			return
 
-		query = query.lower().strip()
+		query = query.strip()
 
+		# Search in database
+		found_songs = self.db.search(query)
+		
 		found_artists = set()
 		found_albums = set() # (album_name, artist_name)
-		found_songs = [] # list of song dicts
 
-		for genre in self.library:
-			for artist in self.library[genre]:
-				if query in artist.lower():
-					found_artists.add(artist)
-
-				for album in self.library[genre][artist]:
-					if query in album.lower():
-						found_albums.add((album, artist))
-
-					for song in self.library[genre][artist][album]:
-						if query in song['title'].lower():
-							found_songs.append(song)
+		for song in found_songs:
+			found_artists.add(song['artist'])
+			found_albums.add((song['album'], song['artist']))
 
 		# Populate Artists
 		for artist in sorted(found_artists):
@@ -766,8 +849,6 @@ class MusicPlayer(QMainWindow):
 		# Default size
 		self.resize(1200, 720)
 
-		# Music library structure: {genre: {artist: {album: [songs]}}}
-		self.library = {}
 		self.current_songs = []
 		self.watched_folders = []
 
@@ -787,8 +868,12 @@ class MusicPlayer(QMainWindow):
 		self.config_dir = self.app_dir / 'config'
 		self.config_dir.mkdir(parents=True, exist_ok=True)
 		self.library_file = self.config_dir / 'library.json'
+		self.db_file = self.config_dir / 'library.db'
 		self.settings_file = self.config_dir / 'settings.json'
 		self.playback_position_file = self.config_dir / 'playback_position.json'
+
+		# Initialize Database
+		self.db = LibraryDatabase(self.db_file)
 
 		# Audio player setup
 		self.player = QMediaPlayer()
@@ -994,16 +1079,6 @@ class MusicPlayer(QMainWindow):
 		self.play_btn.clicked.connect(self.play_pause)
 		center_controls.addWidget(self.play_btn)
 
-		# Stop button
-		# self.stop_btn = QPushButton()
-		# icon_color = 'white' if self.dark_mode else 'black'
-		# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color))
-		# self.stop_btn.setIconSize(self.icon_size)
-		# self.stop_btn.setToolTip("Stop the current playing track")
-		# self.stop_btn.setFlat(True)
-		# self.stop_btn.clicked.connect(self.stop)
-		# center_controls.addWidget(self.stop_btn)
-
 		# Next track button
 		self.next_btn = QPushButton()
 		icon_color = 'white' if self.dark_mode else 'black'
@@ -1077,9 +1152,6 @@ class MusicPlayer(QMainWindow):
 		# ===========================
 		# ASSEMBLE GRID
 		# ===========================
-		# Add widgets to the grid.
-		# (Widget, Row, Column, Alignment)
-
 		# Left container in Col 0, Aligned Left
 		controls_layout.addWidget(self.left_container, 0, 0, Qt.AlignmentFlag.AlignLeft)
 
@@ -1269,109 +1341,75 @@ class MusicPlayer(QMainWindow):
 		self.rescan_library()
 
 	def load_library(self):
-		if not self.library_file.exists():
-			self.show_status_message("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
-			print("No saved library found")
-			return
+		# Check for existing library.db or migrate from JSON
+		if not self.db.get_folders() and self.library_file.exists():
+			self.migrate_library_json()
 
+		self.watched_folders = self.db.get_folders()
+
+		if not self.watched_folders:
+			self.show_status_message("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
+		else:
+			self.show_status_message("Ready")
+
+		self.populate_genre_tree()
+		print(f"Library loaded from DB: {len(self.watched_folders)} folders")
+
+	def migrate_library_json(self):
+		print("Migrating library.json to database...")
 		try:
 			with open(self.library_file, 'r') as f:
 				data = json.load(f)
-
-			self.library = data.get('library', {})
-			self.watched_folders = data.get('watched_folders', [])
-
-			if not self.watched_folders:
-				self.show_status_message("No library found. Add your music library with the ADD FOLDER button located in the top-left.")
-			else:
-				self.show_status_message("Ready")
-
-			self.populate_genre_tree()
-			print(f"Library loaded: {len(self.watched_folders)} folders")
+			
+			watched_folders = data.get('watched_folders', [])
+			self.db.set_folders(watched_folders)
+			
+			library = data.get('library', {})
+			
+			conn = self.db.conn
+			cursor = conn.cursor()
+			
+			count = 0
+			for genre, artists in library.items():
+				for artist, albums in artists.items():
+					for album, songs in albums.items():
+						for song in songs:
+							if isinstance(song, dict):
+								cursor.execute('''
+									INSERT OR IGNORE INTO songs (path, title, artist, album, genre, tracknumber, year, duration) 
+									VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+								''', (
+									song.get('path'),
+									song.get('title'),
+									song.get('artist'),
+									song.get('album'),
+									song.get('genre'),
+									song.get('tracknumber'),
+									song.get('year'),
+									song.get('duration')
+								))
+								count += 1
+			
+			conn.commit()
+			print(f"Migrated {count} songs to database.")
+			
+			# Rename old json file
+			self.library_file.rename(self.config_dir / 'library.json.bak')
+			
 		except Exception as e:
-			print(f"Error loading library: {e}")
+			print(f"Migration failed: {e}")
+			traceback.print_exc()
 
 	def save_library(self):
-		data = {
-			'library': self.library,
-			'watched_folders': self.watched_folders
-		}
-
-		try:
-			with open(self.library_file, 'w') as f:
-				json.dump(data, f, indent=2)
-			print(f"Library saved: {len(self.watched_folders)} folders")
-		except Exception as e:
-			print(f"Error saving library: {e}")
-
-	def scan_folder(self, folder_path):
-		# Scan folder for audio files and organize by metadata
-		audio_extensions = {'.mp3', '.flac', '.ogg', '.wav', '.m4a', '.wma'}
-
-		for root, dirs, files in os.walk(folder_path):
-			for file in files:
-				if Path(file).suffix.lower() in audio_extensions:
-					full_path = os.path.join(root, file)
-
-					try:
-						# Read metadata
-						audio = File(full_path, easy=True)
-
-						if audio is None:
-							continue
-
-						# Extract metadata with fallbacks
-						genre = audio.get('genre', ['Unknown Genre'])[0] if audio.get('genre') else 'Unknown Genre'
-						artist = audio.get('artist', ['Unknown Artist'])[0] if audio.get('artist') else 'Unknown Artist'
-						album = audio.get('album', ['Unknown Album'])[0] if audio.get('album') else 'Unknown Album'
-						title = audio.get('title', [Path(file).stem])[0] if audio.get('title') else Path(file).stem
-						track_num = audio.get('tracknumber', [''])[0] if audio.get('tracknumber') else ''
-						if track_num == '0' or track_num == '00':
-							track_num = ''
-						year = audio.get('date', [''])[0] if audio.get('date') else ''
-						duration = audio.info.length if hasattr(audio, 'info') else 0
-
-						song_data = {
-							'path': full_path,
-							'title': title,
-							'artist': artist,
-							'album': album,
-							'genre': genre,
-							'tracknumber': track_num,
-							'year': year,
-							'duration': duration
-						}
-
-						# Build library structure
-						if genre not in self.library:
-							self.library[genre] = {}
-						if artist not in self.library[genre]:
-							self.library[genre][artist] = {}
-						if album not in self.library[genre][artist]:
-							self.library[genre][artist][album] = []
-
-						# Check if song already exists in this album
-						exists = False
-						for s in self.library[genre][artist][album]:
-							if isinstance(s, dict) and s['path'] == full_path:
-								exists = True
-								break
-							elif s == full_path: # Handle old format
-								exists = True
-								break
-
-						if not exists:
-							self.library[genre][artist][album].append(song_data)
-
-					except Exception as e:
-						print(f"Error reading {full_path}: {e}")
-						continue
+		# Save folders to DB
+		self.db.set_folders(self.watched_folders)
 
 	def populate_genre_tree(self):
 		self.genre_tree.clear()
-		genre_count = len(self.library.keys())
+		genres = self.db.get_genres()
+		genre_count = len(genres)
 		QTreeWidgetItem(self.genre_tree, [f"All Genres ({genre_count})"])
-		for genre in sorted(self.library.keys()):
+		for genre in genres:
 			QTreeWidgetItem(self.genre_tree, [genre])
 
 	def on_genre_selected(self, item):
@@ -1381,25 +1419,18 @@ class MusicPlayer(QMainWindow):
 		self.song_table.setRowCount(0)
 		self.song_table.setSortingEnabled(False)
 
-		all_songs = []
-		artists = set()
-
+		artists = []
 		if genre.startswith("All Genres"):
-			for g in self.library:
-				for a in self.library[g]:
-					artists.add(a)
-					for alb in self.library[g][a]:
-						all_songs.extend(self.library[g][a][alb])
-		elif genre in self.library:
-			for a in self.library[genre]:
-				artists.add(a)
-				for alb in self.library[genre][a]:
-					all_songs.extend(self.library[genre][a][alb])
+			artists = self.db.get_artists()
+		else:
+			artists = self.db.get_artists(genre)
 
-		if artists:
-			QTreeWidgetItem(self.artist_tree, [f"All Artists ({len(artists)})"])
-			for artist in sorted(list(artists)):
-				QTreeWidgetItem(self.artist_tree, [artist])
+		QTreeWidgetItem(self.artist_tree, [f"All Artists ({len(artists)})"])
+		for artist in artists:
+			QTreeWidgetItem(self.artist_tree, [artist])
+
+		# Get all songs for this selection
+		all_songs = self.db.get_songs(genre=genre)
 
 		if all_songs:
 			if not self.is_restoring:
@@ -1424,39 +1455,18 @@ class MusicPlayer(QMainWindow):
 		self.song_table.setRowCount(0)
 		self.song_table.setSortingEnabled(False)
 
-		all_songs = []
-		albums = set()
-
+		albums = []
 		if artist.startswith("All Artists"):
-			# Get all albums for the selected genre(s)
-			if genre.startswith("All Genres"):
-				for g in self.library:
-					for a in self.library[g]:
-						for alb in self.library[g][a]:
-							albums.add(alb)
-							all_songs.extend(self.library[g][a][alb])
-			elif genre in self.library:
-				for a in self.library[genre]:
-					for alb in self.library[genre][a]:
-						albums.add(alb)
-						all_songs.extend(self.library[genre][a][alb])
+			albums = self.db.get_albums(genre=genre)
 		else:
-			# Specific artist
-			if genre.startswith("All Genres"):
-				for g in self.library:
-					if artist in self.library[g]:
-						for alb in self.library[g][artist]:
-							albums.add(alb)
-							all_songs.extend(self.library[g][artist][alb])
-			elif genre in self.library and artist in self.library[genre]:
-				for alb in self.library[genre][artist]:
-					albums.add(alb)
-					all_songs.extend(self.library[genre][artist][alb])
+			albums = self.db.get_albums(genre=genre, artist=artist)
 
-		if albums:
-			QTreeWidgetItem(self.album_tree, [f"All Albums ({len(albums)})"])
-			for album in sorted(list(albums)):
-				QTreeWidgetItem(self.album_tree, [album])
+		QTreeWidgetItem(self.album_tree, [f"All Albums ({len(albums)})"])
+		for album in albums:
+			QTreeWidgetItem(self.album_tree, [album])
+
+		# Get songs
+		all_songs = self.db.get_songs(genre=genre, artist=artist)
 
 		if all_songs:
 			if not self.is_restoring:
@@ -1483,50 +1493,7 @@ class MusicPlayer(QMainWindow):
 		self.song_table.setRowCount(0)
 		self.song_table.setSortingEnabled(False)
 
-		all_songs = []
-
-		if album.startswith("All Albums"):
-			# Get all songs for the selected artist(s) and genre(s)
-			if genre.startswith("All Genres"):
-				if artist.startswith("All Artists"):
-					for g in self.library:
-						for a in self.library[g]:
-							for alb in self.library[g][a]:
-								all_songs.extend(self.library[g][a][alb])
-				else:
-					for g in self.library:
-						if artist in self.library[g]:
-							for alb in self.library[g][artist]:
-								all_songs.extend(self.library[g][artist][alb])
-			else:
-				if artist.startswith("All Artists"):
-					for a in self.library[genre]:
-						for alb in self.library[genre][a]:
-							all_songs.extend(self.library[genre][a][alb])
-				else:
-					for alb in self.library[genre][artist]:
-						all_songs.extend(self.library[genre][artist][alb])
-		else:
-			# Specific album
-			if genre.startswith("All Genres"):
-				if artist.startswith("All Artists"):
-					# This is tricky - album might exist in multiple genres/artists
-					for g in self.library:
-						for a in self.library[g]:
-							if album in self.library[g][a]:
-								all_songs.extend(self.library[g][a][album])
-				else:
-					for g in self.library:
-						if artist in self.library[g] and album in self.library[g][artist]:
-							all_songs.extend(self.library[g][artist][album])
-			else:
-				if artist.startswith("All Artists"):
-					for a in self.library[genre]:
-						if album in self.library[genre][a]:
-							all_songs.extend(self.library[genre][a][album])
-				else:
-					if album in self.library[genre][artist]:
-						all_songs.extend(self.library[genre][artist][album])
+		all_songs = self.db.get_songs(genre=genre, artist=artist, album=album)
 
 		if all_songs:
 			if not self.is_restoring:
@@ -1923,7 +1890,6 @@ class MusicPlayer(QMainWindow):
 			self.search_btn.setIcon(self.load_icon('search.svg', icon_color))
 			self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color))
 			self.next_btn.setIcon(self.load_icon('next.svg', icon_color))
-			# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color))
 
 			# Update play/pause based on state
 			if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -1964,7 +1930,7 @@ class MusicPlayer(QMainWindow):
 		self.throbber.show()
 
 		# Create and start the background scanner
-		self.scanner = LibraryScanner(self.watched_folders)
+		self.scanner = LibraryScanner(self.db_file, self.watched_folders)
 		self.scanner.finished.connect(self.on_scan_finished)
 		self.scanner.start()
 
@@ -1978,35 +1944,29 @@ class MusicPlayer(QMainWindow):
 		self.throbber.hide()
 
 		# Update library and refresh UI
-		if new_library:
-			# Capture current selection to restore it after refresh
-			genre_item = self.genre_tree.currentItem()
-			artist_item = self.artist_tree.currentItem()
-			album_item = self.album_tree.currentItem()
+		genre_item = self.genre_tree.currentItem()
+		artist_item = self.artist_tree.currentItem()
+		album_item = self.album_tree.currentItem()
 
-			sel_genre = genre_item.text(0) if genre_item else None
-			sel_artist = artist_item.text(0) if artist_item else None
-			sel_album = album_item.text(0) if album_item else None
+		sel_genre = genre_item.text(0) if genre_item else None
+		sel_artist = artist_item.text(0) if artist_item else None
+		sel_album = album_item.text(0) if album_item else None
 
-			# Capture currently selected song path
-			sel_song = None
-			curr_row = self.song_table.currentRow()
-			if curr_row >= 0:
-				sel_song = self.song_table.item(curr_row, 0).data(Qt.ItemDataRole.UserRole + 1)
+		# Capture currently selected song path
+		sel_song = None
+		curr_row = self.song_table.currentRow()
+		if curr_row >= 0:
+			sel_song = self.song_table.item(curr_row, 0).data(Qt.ItemDataRole.UserRole + 1)
 
-			self.library = new_library
-			self.populate_genre_tree()
-			self.save_library()
+		self.populate_genre_tree()
+		self.save_library()
 
-			# Restore selection if it still exists in the new library
-			if sel_genre:
-				self.restore_selection(sel_genre, sel_artist, sel_album, sel_song)
+		# Restore selection if it still exists in the new library
+		if sel_genre:
+			self.restore_selection(sel_genre, sel_artist, sel_album, sel_song)
 
-			self.show_status_message("Library scan complete", 5000)
-			print("Background rescan complete")
-		else:
-			self.show_status_message("Library scan finished: No files found", 5000)
-			print("Background rescan finished with no files found")
+		self.show_status_message("Library scan complete", 5000)
+		print("Background rescan complete")
 
 	def handle_player_error(self, error):
 		if error != QMediaPlayer.Error.NoError:
@@ -2131,19 +2091,10 @@ class MusicPlayer(QMainWindow):
 		genre = item.text(0)
 		self.current_playlist = []
 
-		if genre.startswith("All Genres"):
-			for g in self.library:
-				for a in self.library[g]:
-					for alb in self.library[g][a]:
-						self.current_playlist.extend(self.library[g][a][alb])
-		elif genre in self.library:
-			for artist in self.library[genre].values():
-				for album in artist.values():
-					self.current_playlist.extend(album)
-
-		if self.current_playlist:
+		all_songs = self.db.get_songs(genre=genre)
+		if all_songs:
 			# Sort by track number/title
-			self.current_playlist = self.sort_playlist(self.current_playlist)
+			self.current_playlist = self.sort_playlist(all_songs)
 
 			self.unshuffled_playlist = self.current_playlist.copy()
 			if self.shuffle_enabled:
@@ -2151,7 +2102,7 @@ class MusicPlayer(QMainWindow):
 			self.populate_song_table_from_playlist()
 			self.current_track_index = 0
 			first_song = self.current_playlist[0]
-			path = first_song['path'] if isinstance(first_song, dict) else first_song
+			path = first_song['path']
 			self.play_song(path)
 
 	def on_artist_double_clicked(self, item):
@@ -2163,30 +2114,10 @@ class MusicPlayer(QMainWindow):
 		artist = item.text(0)
 		self.current_playlist = []
 
-		if artist.startswith("All Artists"):
-			if genre.startswith("All Genres"):
-				for g in self.library:
-					for a in self.library[g]:
-						for alb in self.library[g][a]:
-							self.current_playlist.extend(self.library[g][a][alb])
-			elif genre in self.library:
-				for a in self.library[genre]:
-					for alb in self.library[genre][a]:
-						self.current_playlist.extend(self.library[genre][a][alb])
-		else:
-			# Collect all songs by this artist
-			if genre.startswith("All Genres"):
-				for g in self.library:
-					if artist in self.library[g]:
-						for album in self.library[g][artist].values():
-							self.current_playlist.extend(album)
-			elif genre in self.library and artist in self.library[genre]:
-				for album in self.library[genre][artist].values():
-					self.current_playlist.extend(album)
-
-		if self.current_playlist:
+		all_songs = self.db.get_songs(genre=genre, artist=artist)
+		if all_songs:
 			# Sort by track number/title
-			self.current_playlist = self.sort_playlist(self.current_playlist)
+			self.current_playlist = self.sort_playlist(all_songs)
 
 			# Save original order and shuffle if enabled
 			self.unshuffled_playlist = self.current_playlist.copy()
@@ -2196,7 +2127,7 @@ class MusicPlayer(QMainWindow):
 			self.populate_song_table_from_playlist()
 			self.current_track_index = 0
 			first_song = self.current_playlist[0]
-			path = first_song['path'] if isinstance(first_song, dict) else first_song
+			path = first_song['path']
 			self.play_song(path)
 
 	def on_album_double_clicked(self, item):
@@ -2211,50 +2142,10 @@ class MusicPlayer(QMainWindow):
 		album = item.text(0)
 		self.current_playlist = []
 
-		if album.startswith("All Albums"):
-			if genre.startswith("All Genres"):
-				if artist.startswith("All Artists"):
-					for g in self.library:
-						for a in self.library[g]:
-							for alb in self.library[g][a]:
-								self.current_playlist.extend(self.library[g][a][alb])
-				else:
-					for g in self.library:
-						if artist in self.library[g]:
-							for alb in self.library[g][artist]:
-								self.current_playlist.extend(self.library[g][artist][alb])
-			else:
-				if artist.startswith("All Artists"):
-					for a in self.library[genre]:
-						for alb in self.library[genre][a]:
-							self.current_playlist.extend(self.library[genre][a][alb])
-				else:
-					for alb in self.library[genre][artist]:
-						self.current_playlist.extend(self.library[genre][artist][alb])
-		else:
-			# Specific album
-			if genre.startswith("All Genres"):
-				if artist.startswith("All Artists"):
-					for g in self.library:
-						for a in self.library[g]:
-							if album in self.library[g][a]:
-								self.current_playlist.extend(self.library[g][a][album])
-				else:
-					for g in self.library:
-						if artist in self.library[g] and album in self.library[g][artist]:
-							self.current_playlist.extend(self.library[g][artist][album])
-			else:
-				if artist.startswith("All Artists"):
-					for a in self.library[genre]:
-						if album in self.library[genre][a]:
-							self.current_playlist.extend(self.library[genre][a][album])
-				else:
-					if album in self.library[genre][artist]:
-						self.current_playlist.extend(self.library[genre][artist][album])
-
-		if self.current_playlist:
+		all_songs = self.db.get_songs(genre=genre, artist=artist, album=album)
+		if all_songs:
 			# Sort by track number/title
-			self.current_playlist = self.sort_playlist(self.current_playlist)
+			self.current_playlist = self.sort_playlist(all_songs)
 
 			# Save original order and shuffle if enabled
 			self.unshuffled_playlist = self.current_playlist.copy()
@@ -2264,7 +2155,7 @@ class MusicPlayer(QMainWindow):
 			self.populate_song_table_from_playlist()
 			self.current_track_index = 0
 			first_song = self.current_playlist[0]
-			path = first_song['path'] if isinstance(first_song, dict) else first_song
+			path = first_song['path']
 			self.play_song(path)
 
 	def populate_song_table_from_playlist(self):
@@ -2274,51 +2165,35 @@ class MusicPlayer(QMainWindow):
 			is_single_album_playlist = True
 			if self.current_playlist:
 				first_song = self.current_playlist[0]
-				# Ensure first_song is a dict for consistent access
-				if not isinstance(first_song, dict): # Fallback for old format
-					is_single_album_playlist = False # Cannot determine, so assume multi-album
+				first_album = first_song.get('album')
+				first_artist = first_song.get('artist')
+				if not first_album or not first_artist:
+					is_single_album_playlist = False 
 				else:
-					first_album = first_song.get('album')
-					first_artist = first_song.get('artist')
-					if not first_album or not first_artist:
-						is_single_album_playlist = False # Missing metadata, can't confirm single album
-					else:
-						for song in self.current_playlist:
-							if not isinstance(song, dict) or song.get('album') != first_album or song.get('artist') != first_artist:
-								is_single_album_playlist = False
-								break
+					for song in self.current_playlist:
+						if song.get('album') != first_album or song.get('artist') != first_artist:
+							is_single_album_playlist = False
+							break
 			else:
-				is_single_album_playlist = False # Empty playlist isn't single album
+				is_single_album_playlist = False 
 
 			for i, song in enumerate(self.current_playlist):
 				self.song_table.insertRow(i)
 
-				if isinstance(song, dict):
-					# Use cached metadata
-					song_path = song.get('path', '')
-					track_num_raw = song.get('tracknumber', '')
-					title = song.get('title', Path(song_path).stem)
-					artist_name = song.get('artist', '')
-					album_name = song.get('album', '')
-					genre_name = song.get('genre', '')
-					year_raw = song.get('year', '')
-					duration = song.get('duration', 0)
-				else:
-					# Fallback for old format
-					song_path = song
-					track_num_raw = ''
-					title = Path(song_path).stem
-					artist_name = ''
-					album_name = ''
-					genre_name = ''
-					year_raw = ''
-					duration = 0
+				# Use cached metadata
+				song_path = song.get('path', '')
+				track_num_raw = song.get('tracknumber', '')
+				title = song.get('title', Path(song_path).stem)
+				artist_name = song.get('artist', '')
+				album_name = song.get('album', '')
+				genre_name = song.get('genre', '')
+				year_raw = song.get('year', '')
+				duration = song.get('duration', 0)
 
 				# Track number processing
-				# Apply sequential numbering if it's a multi-album playlist
 				if not is_single_album_playlist:
 					track_num_display = str(i + 1)
-					track_num_sort = i + 1 # For sorting, use sequential
+					track_num_sort = i + 1 
 				else:
 					# Use metadata track number
 					track_num_display = str(track_num_raw).strip()
@@ -2447,12 +2322,10 @@ class MusicPlayer(QMainWindow):
 
 		# Save playback position if feature is enabled
 		if self.remember_position and self.current_playlist and self.current_track_index < len(self.current_playlist):
-			# Only save if there's actually a song loaded that matches our current track index.
-			# This prevents saving a "stale" or never-played song when just browsing the library.
 			current_source = self.player.source().toLocalFile()
 			if current_source:
 				song = self.current_playlist[self.current_track_index]
-				song_path = song['path'] if isinstance(song, dict) else song
+				song_path = song['path']
 
 				if os.path.normpath(current_source) == os.path.normpath(song_path):
 					position_data = {
@@ -2467,6 +2340,7 @@ class MusicPlayer(QMainWindow):
 					except Exception as e:
 						print(f"Error saving playback position: {e}")
 
+		self.db.close()
 		event.accept()
 
 	def load_icon(self, filename, color=None):
@@ -2534,8 +2408,6 @@ class MusicPlayer(QMainWindow):
 		for y in range(small_image.height()):
 			for x in range(small_image.width()):
 				pixel = small_image.pixelColor(x, y)
-				# Ignore very dark/black areas (Value < 50) and very desaturated/gray areas (Saturation < 50)
-				# Also ignore very bright/white areas (Value > 240 and Saturation < 30)
 				h, s, v, a = pixel.getHsv()
 
 				if v > 50 and s > 50 and not (v > 240 and s < 30):
@@ -2648,9 +2520,6 @@ class MusicPlayer(QMainWindow):
 								lyrics_text = tag.text
 								break
 							elif isinstance(tag, SYLT):
-								# Mutagen SYLT data is a list of (text, timestamp)
-								# SYLT timestamps are usually in frames or milliseconds
-								# For now, let's just try to extract the text part
 								self.sync_lyrics = [(t, text) for text, t in tag.lyrics]
 								self.sync_lyrics.sort()
 								lyrics_text = "\n".join([item[1] for item in self.sync_lyrics])
@@ -2743,7 +2612,7 @@ class MusicPlayer(QMainWindow):
 			self.show_status_message("Error reading lyrics")
 
 	def search_library(self):
-		self.search_dialog = SearchDialog(self.library, self)
+		self.search_dialog = SearchDialog(self.db, self)
 		self.search_dialog.result_selected.connect(self.handle_search_selection)
 		self.search_dialog.show()
 
@@ -2801,7 +2670,6 @@ class MusicPlayer(QMainWindow):
 
 		self.prev_btn.setIcon(self.load_icon('previous.svg', icon_color))
 		self.next_btn.setIcon(self.load_icon('next.svg', icon_color))
-		# self.stop_btn.setIcon(self.load_icon('stop.svg', icon_color))
 
 		# Update play/pause button based on current state
 		if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -2850,14 +2718,12 @@ class MusicPlayer(QMainWindow):
 			bg_color = "#1e1e1e"
 			secondary_bg = "#2d2d2d"
 			text_color = "#ffffff"
-			secondary_text = "#b0b0b0"
 			border_color = "#3d3d3d"
 		else:
 			# Light mode colors
 			bg_color = "#e8e8e8"
 			secondary_bg = "#f5f5f5"
 			text_color = "#1a1a1a"
-			secondary_text = "#4a4a4a"
 			border_color = "#c0c0c0"
 
 		# Accent variants
@@ -3052,12 +2918,10 @@ class MusicPlayer(QMainWindow):
 				random.shuffle(self.current_playlist)
 
 				if current_song:
-					# Find current song in shuffled list and move to front (or just remove and insert)
-					# We use path for comparison to be safe
-					current_path = current_song['path'] if isinstance(current_song, dict) else current_song
+					# Find current song in shuffled list and move to front
+					current_path = current_song['path']
 					for i, song in enumerate(self.current_playlist):
-						song_path = song['path'] if isinstance(song, dict) else song
-						if song_path == current_path:
+						if song['path'] == current_path:
 							self.current_playlist.pop(i)
 							break
 					self.current_playlist.insert(0, current_song)
@@ -3075,10 +2939,9 @@ class MusicPlayer(QMainWindow):
 
 				# Find where the current song was in the original order
 				if current_song:
-					current_path = current_song['path'] if isinstance(current_song, dict) else current_song
+					current_path = current_song['path']
 					for i, song in enumerate(self.current_playlist):
-						song_path = song['path'] if isinstance(song, dict) else song
-						if song_path == current_path:
+						if song['path'] == current_path:
 							self.current_track_index = i
 							break
 				else:
@@ -3090,14 +2953,9 @@ class MusicPlayer(QMainWindow):
 
 	def sort_playlist(self, playlist):
 		def get_sort_key(song):
-			# Handle both new dict format and old path format
-			if isinstance(song, dict):
-				track_num_raw = song.get('tracknumber', '9999')
-				title = song.get('title', Path(song['path']).stem)
-				path = song['path']
-			else:
-				# Fallback for old library format during transition
-				return (9999, Path(song).stem.lower())
+			track_num_raw = song.get('tracknumber', '9999')
+			title = song.get('title', Path(song['path']).stem)
+			path = song['path']
 
 			try:
 				# Handle "1/12" format
@@ -3192,9 +3050,6 @@ class MusicPlayer(QMainWindow):
 		if not self.remember_position or not self.playback_position_file.exists():
 			return
 
-		# If we already have a playlist (from restore_selection), we might just want to seek
-		# but if we're restoring the WHOLE state from playback_position.json, we do it here.
-
 		try:
 			with open(self.playback_position_file, 'r') as f:
 				position_data = json.load(f)
@@ -3204,12 +3059,9 @@ class MusicPlayer(QMainWindow):
 			playlist = position_data.get('playlist', [])
 			track_index = position_data.get('track_index', 0)
 
-			# Extract actual path if it's stored as a dict or string
-			actual_path = song_data['path'] if isinstance(song_data, dict) else song_data
+			actual_path = song_data['path']
 
-			# Verify the song still exists
 			if actual_path and Path(actual_path).exists():
-				# If we don't have a playlist yet, or it's different, restore it
 				if not self.current_playlist or len(self.current_playlist) != len(playlist):
 					self.current_playlist = playlist
 					self.current_track_index = track_index
@@ -3217,30 +3069,23 @@ class MusicPlayer(QMainWindow):
 
 				self.highlight_current_song()
 
-				# Store the position to restore after media loads
 				self._pending_seek_position = position
 
-				# Connect to mediaStatusChanged to seek after loading
 				def on_media_loaded(status):
 					if status == QMediaPlayer.MediaStatus.LoadedMedia and hasattr(self, '_pending_seek_position'):
-						# Delay seek slightly to ensure player is ready
 						QTimer.singleShot(100, lambda: self._finish_restore())
-						# Disconnect this handler
 						self.player.mediaStatusChanged.disconnect(on_media_loaded)
 
 				self.player.mediaStatusChanged.connect(on_media_loaded)
 
-				# Load the song
 				self.is_restoring = True
 				self.player.setSource(QUrl.fromLocalFile(actual_path))
 
-				# Update UI Now Playing
 				found_metadata = False
 				for song in self.current_playlist:
-					s_path = song['path'] if isinstance(song, dict) else song
-					if s_path == actual_path:
-						artist = song.get('artist', 'Unknown Artist') if isinstance(song, dict) else 'Unknown Artist'
-						title = song.get('title', Path(actual_path).stem) if isinstance(song, dict) else Path(actual_path).stem
+					if song['path'] == actual_path:
+						artist = song.get('artist', 'Unknown Artist')
+						title = song.get('title', Path(actual_path).stem)
 						self.now_playing_text.setText(f"{artist} - {title}")
 						found_metadata = True
 						break
@@ -3253,7 +3098,7 @@ class MusicPlayer(QMainWindow):
 
 				print(f"Restoring playback position: {position/1000:.1f}s")
 			else:
-				print(f"DEBUG - Song path doesn't exist or is empty: {actual_path}")
+				print(f"DEBUG - Song path doesn't exist: {actual_path}")
 
 		except Exception as e:
 			self.is_restoring = False
@@ -3266,7 +3111,6 @@ class MusicPlayer(QMainWindow):
 			self.player.setPosition(self._pending_seek_position)
 			delattr(self, '_pending_seek_position')
 
-		# Give it a moment before allowing normal status changes to process EndOfMedia
 		QTimer.singleShot(500, self._clear_restoring_flag)
 
 	def _clear_restoring_flag(self):
@@ -3349,11 +3193,8 @@ class MusicPlayer(QMainWindow):
 		self.save_settings()
 
 if __name__ == '__main__':
-	# Windows-specific: Set App User Model ID for custom taskbar icon
-	# This prevents Windows from grouping the app with python.exe
 	if sys.platform == 'win32':
 		try:
-			# Set a unique App User Model ID
 			app_id = 'Buzzkill.Music.Player.1.0'
 			ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
 		except Exception as e:
@@ -3371,7 +3212,6 @@ if __name__ == '__main__':
 			font = QFont(font_families[0], 10)
 			app.setFont(font)
 		else:
-			# Fallback if font loaded but family not found
 			font = app.font()
 			font.setPointSize(10)
 			app.setFont(font)
@@ -3383,10 +3223,8 @@ if __name__ == '__main__':
 
 	player = MusicPlayer()
 
-	# Set window icon using relative path (portable)
 	icon_dir = Path(__file__).parent.resolve() / 'icons'
 
-	# On Windows, prefer .ico format if available (better quality)
 	if sys.platform == 'win32' and (icon_dir / 'logo.ico').exists():
 		icon_path = icon_dir / 'logo.ico'
 	else:
