@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QFileDialog,
                              QPushButton, QSlider, QSplitter, QStackedWidget,
                              QStatusBar, QTableWidget, QTableWidgetItem,
                              QTextEdit, QTreeWidget, QTreeWidgetItem,
-                             QVBoxLayout, QWidget)
+                             QVBoxLayout, QWidget, QFrame)
 
 
 class ClickableSlider(QSlider):
@@ -903,6 +903,7 @@ class MusicPlayer(QMainWindow):
 		self.manual_accent_color = "#0E47A1"
 		self.dynamic_accent_color_enabled = False
 		self.show_album_art = False
+		self.show_mini_album_art = False
 		self.is_shrunk = False
 		self.expanded_geometry = None
 		self.is_restoring = False
@@ -998,15 +999,12 @@ class MusicPlayer(QMainWindow):
 		self.remember_position_btn.clicked.connect(self.toggle_remember_position)
 		left_controls.addWidget(self.remember_position_btn)
 
-		# Show album art toggle button
-		self.show_album_art_btn = QPushButton()
-		icon_color = 'white' if self.dark_mode else 'black'
-		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color))
-		self.show_album_art_btn.setIconSize(self.icon_size)
-		self.show_album_art_btn.setToolTip("Show album artwork")
-		self.show_album_art_btn.setFlat(True)
-		self.show_album_art_btn.clicked.connect(self.toggle_album_art)
-		left_controls.addWidget(self.show_album_art_btn)
+		# Vertical separator
+		# separator = QFrame()
+		# separator.setFrameShape(QFrame.Shape.VLine)
+		# separator.setFixedWidth(3)
+		# separator.setStyleSheet("QFrame { background-color: #FFFFFF; }") # change with dark/light theme
+		# layout.addWidget(separator)
 
 		# Dark/Light Mode button
 		self.darkmode_btn = QPushButton()
@@ -1037,6 +1035,16 @@ class MusicPlayer(QMainWindow):
 		self.shrink_expand_btn.setFlat(True)
 		self.shrink_expand_btn.clicked.connect(self.shrink_and_expand)
 		left_controls.addWidget(self.shrink_expand_btn)
+
+		# Show album art toggle button
+		self.show_album_art_btn = QPushButton()
+		icon_color = 'white' if self.dark_mode else 'black'
+		self.show_album_art_btn.setIcon(self.load_icon('album-art.svg', icon_color))
+		self.show_album_art_btn.setIconSize(self.icon_size)
+		self.show_album_art_btn.setToolTip("Show album artwork")
+		self.show_album_art_btn.setFlat(True)
+		self.show_album_art_btn.clicked.connect(self.toggle_album_art)
+		left_controls.addWidget(self.show_album_art_btn)
 
 		# ===========================
 		# 2. CENTER SECTION
@@ -1208,6 +1216,14 @@ class MusicPlayer(QMainWindow):
 		progress_layout.addStretch()
 
 		layout.addLayout(progress_layout)
+
+		# Mini Artwork Panel (for mini player mode)
+		self.mini_art_label = ScalableLabel()
+		self.mini_art_label.setFixedSize(300, 300)
+		self.mini_art_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+		self.mini_art_label.setStyleSheet("border: 1px solid #3d3d3d; background-color: #000000; margin-bottom: 10px;")
+		self.mini_art_label.hide()
+		layout.addWidget(self.mini_art_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
 		#==============================================
 		#==============     ROW 2    ==================
@@ -1710,6 +1726,7 @@ class MusicPlayer(QMainWindow):
 			'accent_color': self.manual_accent_color,
 			'dynamic_accent_color_enabled': self.dynamic_accent_color_enabled,
 			'show_album_art': self.show_album_art,
+			'show_mini_album_art': self.show_mini_album_art,
 			'is_shrunk': self.is_shrunk,
 			'progress_slider_min_width': self.progress_slider.minimumWidth(),
 			'progress_slider_max_width': self.progress_slider.maximumWidth(),
@@ -1838,6 +1855,8 @@ class MusicPlayer(QMainWindow):
 			else:
 				self.album_art_label.hide()
 
+			self.show_mini_album_art = settings.get('show_mini_album_art', False)
+
 			# Restore shrink state
 			self.is_shrunk = settings.get('is_shrunk', False)
 			expanded_geo = settings.get('expanded_geometry')
@@ -1852,11 +1871,10 @@ class MusicPlayer(QMainWindow):
 				self.now_playing_label.hide()
 				self.statusBar().hide()
 
-				# Hide all buttons in left section EXCEPT shrink/expand
+				# Hide all buttons in left section EXCEPT shrink/expand and show_album_art
 				self.add_folder_btn.hide()
 				self.rescan_btn.hide()
 				self.remember_position_btn.hide()
-				self.show_album_art_btn.hide()
 				self.darkmode_btn.hide()
 				self.accent_btn.hide()
 
@@ -1868,7 +1886,13 @@ class MusicPlayer(QMainWindow):
 				self.progress_slider.setMaximumWidth(350)
 
 				# Set fixed size for mini mode
-				self.setFixedSize(400, 107)
+				if self.show_mini_album_art:
+					self.setFixedSize(400, 407)
+					self.mini_art_label.show()
+					self.update_album_art()
+				else:
+					self.setFixedSize(400, 107)
+					self.mini_art_label.hide()
 
 				shrink_icon = 'expand.svg'
 				self.shrink_expand_btn.setToolTip("Expand the Interface")
@@ -2475,7 +2499,7 @@ class MusicPlayer(QMainWindow):
 				# Fallback to manual color if no art
 				self.restore_manual_accent_color()
 
-		# Update UI Label if visible
+		# Update UI Labels if visible
 		if self.show_album_art:
 			if artwork_found and pixmap:
 				self.album_art_label.setPixmap(pixmap)
@@ -2485,6 +2509,16 @@ class MusicPlayer(QMainWindow):
 					self.album_art_label.setText("No track playing")
 				else:
 					self.album_art_label.setText("No artwork found")
+
+		if self.show_mini_album_art:
+			if artwork_found and pixmap:
+				self.mini_art_label.setPixmap(pixmap)
+			else:
+				self.mini_art_label.clear()
+				if not source:
+					self.mini_art_label.setText("No track playing")
+				else:
+					self.mini_art_label.setText("No artwork found")
 
 	def restore_manual_accent_color(self):
 		if self.accent_color != self.manual_accent_color:
@@ -3008,42 +3042,68 @@ class MusicPlayer(QMainWindow):
 		if hasattr(self, 'art_anim') and self.art_anim.state() == QVariantAnimation.State.Running:
 			return
 
-		self.show_album_art = not self.show_album_art
+		if self.is_shrunk:
+			self.show_mini_album_art = not self.show_mini_album_art
+			if self.show_mini_album_art:
+				self.mini_art_label.show()
+				self.update_album_art()
+				start_height = 107
+				end_height = 407
+				easing = QEasingCurve.Type.OutQuad
+			else:
+				start_height = 407
+				end_height = 107
+				easing = QEasingCurve.Type.InQuad
 
-		total_width = self.horizontal_splitter.width()
-		start_sizes = self.horizontal_splitter.sizes()
+			self.art_anim = QVariantAnimation(self)
+			self.art_anim.setDuration(350)
+			self.art_anim.setStartValue(start_height)
+			self.art_anim.setEndValue(end_height)
+			self.art_anim.setEasingCurve(easing)
 
-		if self.show_album_art:
-			self.album_art_label.show()
-			self.update_album_art()
-			# Target: 4 equal columns
-			equal_width = total_width // 4
-			end_sizes = [equal_width] * 4
-			easing = QEasingCurve.Type.OutQuad
+			def animate_mini(v):
+				self.setFixedSize(400, v)
+
+			self.art_anim.valueChanged.connect(animate_mini)
+			if not self.show_mini_album_art:
+				self.art_anim.finished.connect(self.mini_art_label.hide)
+			self.art_anim.start()
 		else:
-			# Target: 3 equal columns, 4th is 0
-			equal_width = total_width // 3
-			end_sizes = [equal_width, equal_width, equal_width, 0]
-			easing = QEasingCurve.Type.InQuad
+			self.show_album_art = not self.show_album_art
+			total_width = self.horizontal_splitter.width()
+			start_sizes = self.horizontal_splitter.sizes()
 
-		self.art_anim = QVariantAnimation(self)
-		self.art_anim.setDuration(350)
-		self.art_anim.setStartValue(0.0)
-		self.art_anim.setEndValue(1.0)
-		self.art_anim.setEasingCurve(easing)
+			if self.show_album_art:
+				self.album_art_label.show()
+				self.update_album_art()
+				# Target: 4 equal columns
+				equal_width = total_width // 4
+				end_sizes = [equal_width] * 4
+				easing = QEasingCurve.Type.OutQuad
+			else:
+				# Target: 3 equal columns, 4th is 0
+				equal_width = total_width // 3
+				end_sizes = [equal_width, equal_width, equal_width, 0]
+				easing = QEasingCurve.Type.InQuad
 
-		def animate_splitter(progress):
-			current_sizes = []
-			for start, end in zip(start_sizes, end_sizes):
-				current_sizes.append(int(start + (end - start) * progress))
-			self.horizontal_splitter.setSizes(current_sizes)
+			self.art_anim = QVariantAnimation(self)
+			self.art_anim.setDuration(350)
+			self.art_anim.setStartValue(0.0)
+			self.art_anim.setEndValue(1.0)
+			self.art_anim.setEasingCurve(easing)
 
-		self.art_anim.valueChanged.connect(animate_splitter)
+			def animate_splitter(progress):
+				current_sizes = []
+				for start, end in zip(start_sizes, end_sizes):
+					current_sizes.append(int(start + (end - start) * progress))
+				self.horizontal_splitter.setSizes(current_sizes)
 
-		if not self.show_album_art:
-			self.art_anim.finished.connect(self.album_art_label.hide)
+			self.art_anim.valueChanged.connect(animate_splitter)
 
-		self.art_anim.start()
+			if not self.show_album_art:
+				self.art_anim.finished.connect(self.album_art_label.hide)
+
+			self.art_anim.start()
 		self.save_settings()
 
 	def restore_playback_position(self):
@@ -3118,6 +3178,10 @@ class MusicPlayer(QMainWindow):
 		print("Restoration complete")
 
 	def shrink_and_expand(self):
+		# Stop any ongoing album art animation to prevent geometry conflicts
+		if hasattr(self, 'art_anim') and self.art_anim.state() == QVariantAnimation.State.Running:
+			self.art_anim.stop()
+
 		self.is_shrunk = not self.is_shrunk
 		icon_color = 'white' if self.dark_mode else 'black'
 
@@ -3131,11 +3195,10 @@ class MusicPlayer(QMainWindow):
 			self.now_playing_label.hide()
 			self.statusBar().hide()
 
-			# Hide all buttons in left section EXCEPT shrink/expand
+			# Hide all buttons in left section EXCEPT shrink/expand and show_album_art
 			self.add_folder_btn.hide()
 			self.rescan_btn.hide()
 			self.remember_position_btn.hide()
-			self.show_album_art_btn.hide()
 			self.darkmode_btn.hide()
 			self.accent_btn.hide()
 
@@ -3150,7 +3213,13 @@ class MusicPlayer(QMainWindow):
 			self.play_btn.setIconSize(QSize(20, 20))
 
 			# Set fixed size for mini mode
-			self.setFixedSize(400, 107)
+			if self.show_mini_album_art:
+				self.setFixedSize(400, 407)
+				self.mini_art_label.show()
+				self.update_album_art()
+			else:
+				self.setFixedSize(400, 107)
+				self.mini_art_label.hide()
 
 			self.shrink_expand_btn.setIcon(self.load_icon('expand.svg', icon_color))
 			self.shrink_expand_btn.setToolTip("Expand the Interface")
@@ -3165,6 +3234,9 @@ class MusicPlayer(QMainWindow):
 			self.now_playing_label.show()
 			self.statusBar().show()
 
+			# Hide mini artwork panel instantly
+			self.mini_art_label.hide()
+
 			# Show all buttons in left section
 			self.add_folder_btn.show()
 			self.rescan_btn.show()
@@ -3172,6 +3244,13 @@ class MusicPlayer(QMainWindow):
 			self.show_album_art_btn.show()
 			self.darkmode_btn.show()
 			self.accent_btn.show()
+
+			# Show full size album art if enabled
+			if self.show_album_art:
+				self.album_art_label.show()
+				self.update_album_art()
+			else:
+				self.album_art_label.hide()
 
 			# Restore minimum width constraint
 			self.left_container.setMinimumWidth(200)
