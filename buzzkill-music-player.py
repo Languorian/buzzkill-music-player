@@ -999,12 +999,11 @@ class MusicPlayer(QMainWindow):
 		self.remember_position_btn.clicked.connect(self.toggle_remember_position)
 		left_controls.addWidget(self.remember_position_btn)
 
-		# Vertical separator
-		# separator = QFrame()
-		# separator.setFrameShape(QFrame.Shape.VLine)
-		# separator.setFixedWidth(3)
-		# separator.setStyleSheet("QFrame { background-color: #FFFFFF; }") # change with dark/light theme
-		# layout.addWidget(separator)
+		# Vertical separator 1
+		self.separator1 = QFrame()
+		self.separator1.setFrameShape(QFrame.Shape.VLine)
+		self.separator1.setFixedWidth(1)
+		left_controls.addWidget(self.separator1)
 
 		# Dark/Light Mode button
 		self.darkmode_btn = QPushButton()
@@ -1025,6 +1024,12 @@ class MusicPlayer(QMainWindow):
 		self.accent_btn.setFlat(True)
 		self.accent_btn.clicked.connect(self.choose_accent_color)
 		left_controls.addWidget(self.accent_btn)
+
+		# Vertical separator 2
+		self.separator2 = QFrame()
+		self.separator2.setFrameShape(QFrame.Shape.VLine)
+		self.separator2.setFixedWidth(1)
+		left_controls.addWidget(self.separator2)
 
 		# Shrink/Expand button
 		self.shrink_expand_btn = QPushButton()
@@ -1877,6 +1882,8 @@ class MusicPlayer(QMainWindow):
 				self.remember_position_btn.hide()
 				self.darkmode_btn.hide()
 				self.accent_btn.hide()
+				self.separator1.hide()
+				self.separator2.hide()
 
 				# Remove minimum width constraint temporarily
 				self.left_container.setMinimumWidth(0)
@@ -3201,6 +3208,8 @@ class MusicPlayer(QMainWindow):
 			self.remember_position_btn.hide()
 			self.darkmode_btn.hide()
 			self.accent_btn.hide()
+			self.separator1.hide()
+			self.separator2.hide()
 
 			# Remove minimum width constraint temporarily
 			self.left_container.setMinimumWidth(0)
@@ -3244,6 +3253,8 @@ class MusicPlayer(QMainWindow):
 			self.show_album_art_btn.show()
 			self.darkmode_btn.show()
 			self.accent_btn.show()
+			self.separator1.show()
+			self.separator2.show()
 
 			# Show full size album art if enabled
 			if self.show_album_art:
