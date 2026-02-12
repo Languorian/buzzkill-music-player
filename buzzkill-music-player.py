@@ -1,22 +1,37 @@
-import sys
-import os
+import ctypes
 import json
+import os
+import re
+import random
+import sys
+import traceback
 from pathlib import Path
 
 # Suppress Qt multimedia debug output
 os.environ['QT_LOGGING_RULES'] = 'qt.multimedia*=false'
 
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-							 QHBoxLayout, QPushButton, QTreeWidget, QTreeWidgetItem,
-							 QTableWidget, QTableWidgetItem, QFileDialog, QSlider,
-							 QLabel, QSplitter, QGridLayout, QDialog, QLineEdit,
-							 QStatusBar, QListWidget, QListWidgetItem, QMenu,
-							 QStackedWidget, QTextEdit, QGraphicsOpacityEffect, QCheckBox,
-							 QProgressBar)
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QFontDatabase
-from PyQt6.QtCore import (Qt, QUrl, QSize, QRect, QThread, pyqtSignal, 
-						  QPropertyAnimation, QEasingCurve, QVariantAnimation)
-from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+# Third-party imports
+from mutagen import File
+from mutagen.flac import FLAC, Picture
+from mutagen.id3 import APIC, ID3, SYLT, USLT
+from mutagen.mp4 import MP4, MP4Cover
+
+# PyQt6 imports
+from PyQt6.QtCore import (QEasingCurve, QEvent, QPropertyAnimation, QRect,
+                          QSize, Qt, QTimer, QUrl, QVariantAnimation,
+                          QThread, pyqtSignal)
+from PyQt6.QtGui import (QColor, QFont, QFontDatabase, QIcon, QPainter,
+                         QPixmap, QTextCharFormat, QTextCursor)
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QDialog, QFileDialog,
+                             QGraphicsOpacityEffect, QGridLayout, QHBoxLayout,
+                             QLabel, QLineEdit, QListWidget, QListWidgetItem,
+                             QMainWindow, QMenu, QMessageBox, QProgressBar,
+                             QPushButton, QSlider, QSplitter, QStackedWidget,
+                             QStatusBar, QTableWidget, QTableWidgetItem,
+                             QTextEdit, QTreeWidget, QTreeWidgetItem,
+                             QVBoxLayout, QWidget)
+
 
 class ClickableSlider(QSlider):
 	scrolled = pyqtSignal(int)
@@ -41,7 +56,6 @@ class LibraryScanner(QThread):
 		self.watched_folders = watched_folders
 
 	def run(self):
-		from mutagen import File
 		new_library = {}
 		audio_extensions = {'.mp3', '.flac', '.ogg', '.wav', '.m4a', '.wma'}
 
@@ -114,7 +128,7 @@ class ColorPickerDialog(QDialog):
 			self.color = QColor(dynamic_color)
 		else:
 			self.color = QColor(initial_color)
-		
+
 		self.preview = QWidget()
 		self.preview.setFixedHeight(80)
 		layout.addWidget(self.preview)
@@ -167,7 +181,6 @@ class ColorPickerDialog(QDialog):
 		self.update_preview()
 
 	def changeEvent(self, event):
-		from PyQt6.QtCore import QEvent
 		if event.type() == QEvent.Type.ActivationChange:
 			if not self.isActiveWindow():
 				self.reject()
@@ -187,7 +200,7 @@ class ColorPickerDialog(QDialog):
 		self.s_slider.setEnabled(not checked)
 		self.hex_input.setEnabled(not checked)
 		self.default_btn.setEnabled(not checked)
-		
+
 		if checked:
 			# Update sliders to the dynamic artwork color
 			color = QColor(self.dynamic_color)
@@ -230,7 +243,7 @@ class ColorPickerDialog(QDialog):
 	def update_preview(self):
 		color_name = self.color.name()
 		self.preview.setStyleSheet(f"background-color: {color_name}; border: 1px solid #3d3d3d; border-radius: 4px;")
-		
+
 		if self.dark_mode:
 			slider_subpage = color_name
 			text_color = "#ffffff"
@@ -269,7 +282,7 @@ class ColorPickerDialog(QDialog):
 			s = self.s_slider.value()
 			v = self.color.value()
 			self.color.setHsv(h, s, v)
-			
+
 			self.r_slider.blockSignals(True)
 			self.g_slider.blockSignals(True)
 			self.b_slider.blockSignals(True)
@@ -284,7 +297,7 @@ class ColorPickerDialog(QDialog):
 			self.s_slider.blockSignals(True)
 			self.s_slider.setValue(self.color.hsvSaturation())
 			self.s_slider.blockSignals(False)
-		
+
 		# Keep track of the last manual color choice
 		if not self.dynamic_checkbox.isChecked():
 			self.last_manual_color = self.color
@@ -297,7 +310,7 @@ class ColorPickerDialog(QDialog):
 	def on_hex_changed(self, text):
 		if QColor.isValidColorName(text):
 			self.color = QColor(text)
-			
+
 			# Update last used manual color if dynamic is off
 			if not self.dynamic_checkbox.isChecked():
 				self.last_manual_color = self.color
@@ -379,7 +392,6 @@ class LibraryFoldersDialog(QDialog):
 		layout.addLayout(buttons)
 
 	def changeEvent(self, event):
-		from PyQt6.QtCore import QEvent
 		if event.type() == QEvent.Type.ActivationChange:
 			if not self.isActiveWindow() and not getattr(self, '_opening_dialog', False):
 				self.reject()
@@ -456,7 +468,6 @@ class EditMetadataDialog(QDialog):
 		self.new_artwork_data = None
 		self.mime_type = "image/jpeg"
 
-		from mutagen import File
 		try:
 			self.audio = File(song_path, easy=True)
 			if self.audio is None:
@@ -526,7 +537,6 @@ class EditMetadataDialog(QDialog):
 		layout.addLayout(btn_layout)
 
 	def load_current_art(self):
-		from mutagen import File
 		try:
 			audio = File(self.song_path)
 			artwork = None
@@ -578,11 +588,9 @@ class EditMetadataDialog(QDialog):
 				pixmap.loadFromData(self.new_artwork_data)
 				self.art_label.setPixmap(pixmap)
 			except Exception as e:
-				from PyQt6.QtWidgets import QMessageBox
 				QMessageBox.warning(self, "Error", f"Could not load image: {e}")
 
 	def save_metadata(self):
-		from mutagen import File
 		try:
 			# Save text metadata
 			audio = File(self.song_path, easy=True)
@@ -595,7 +603,6 @@ class EditMetadataDialog(QDialog):
 			if self.new_artwork_data:
 				ext = Path(self.song_path).suffix.lower()
 				if ext == '.mp3':
-					from mutagen.id3 import ID3, APIC
 					try:
 						tags = ID3(self.song_path)
 					except:
@@ -615,7 +622,6 @@ class EditMetadataDialog(QDialog):
 					))
 					tags.save(self.song_path)
 				elif ext == '.flac':
-					from mutagen.flac import Picture, FLAC
 					audio = FLAC(self.song_path)
 					picture = Picture()
 					picture.data = self.new_artwork_data
@@ -626,7 +632,6 @@ class EditMetadataDialog(QDialog):
 					audio.add_picture(picture)
 					audio.save()
 				elif ext in ['.m4a', '.mp4']:
-					from mutagen.mp4 import MP4, MP4Cover
 					audio = MP4(self.song_path)
 					fmt = MP4Cover.FORMAT_JPEG if self.mime_type == "image/jpeg" else MP4Cover.FORMAT_PNG
 					audio['covr'] = [MP4Cover(self.new_artwork_data, imageformat=fmt)]
@@ -635,7 +640,6 @@ class EditMetadataDialog(QDialog):
 
 			self.accept()
 		except Exception as e:
-			from PyQt6.QtWidgets import QMessageBox
 			QMessageBox.critical(self, "Error", f"Failed to save metadata: {e}")
 
 class SearchDialog(QDialog):
@@ -684,7 +688,6 @@ class SearchDialog(QDialog):
 		self.search_bar.setFocus()
 
 	def changeEvent(self, event):
-		from PyQt6.QtCore import QEvent
 		if event.type() == QEvent.Type.ActivationChange:
 			if not self.isActiveWindow():
 				self.reject()
@@ -1225,7 +1228,7 @@ class MusicPlayer(QMainWindow):
 		# Status Bar
 		self.setStatusBar(QStatusBar())
 		self.statusBar().setSizeGripEnabled(False)
-		
+
 		# Container for throbber and label to keep them centered together
 		status_container = QWidget()
 		status_layout = QHBoxLayout(status_container)
@@ -1241,18 +1244,17 @@ class MusicPlayer(QMainWindow):
 		self.throbber.hide()
 
 		self.status_label = QLabel("Ready")
-		
+
 		status_layout.addStretch(1)
 		status_layout.addWidget(self.throbber)
 		status_layout.addWidget(self.status_label)
 		status_layout.addStretch(1)
-		
+
 		self.statusBar().addWidget(status_container, 1)
 
 	def show_status_message(self, message, timeout=0):
 		self.status_label.setText(message)
 		if timeout > 0:
-			from PyQt6.QtCore import QTimer
 			# Use a timer to clear the message after the timeout
 			QTimer.singleShot(timeout, lambda: self.status_label.setText("") if self.status_label.text() == message else None)
 
@@ -1304,8 +1306,6 @@ class MusicPlayer(QMainWindow):
 
 	def scan_folder(self, folder_path):
 		# Scan folder for audio files and organize by metadata
-		from mutagen import File
-
 		audio_extensions = {'.mp3', '.flac', '.ogg', '.wav', '.m4a', '.wma'}
 
 		for root, dirs, files in os.walk(folder_path):
@@ -1402,7 +1402,12 @@ class MusicPlayer(QMainWindow):
 				QTreeWidgetItem(self.artist_tree, [artist])
 
 		if all_songs:
-			self.current_playlist = self.sort_playlist(all_songs)
+			if not self.is_restoring:
+				self.current_playlist = self.sort_playlist(all_songs)
+				self.unshuffled_playlist = self.current_playlist.copy()
+				if self.shuffle_enabled:
+					random.shuffle(self.current_playlist)
+
 			self.populate_song_table_from_playlist()
 
 		self.song_table.setSortingEnabled(True)
@@ -1454,14 +1459,17 @@ class MusicPlayer(QMainWindow):
 				QTreeWidgetItem(self.album_tree, [album])
 
 		if all_songs:
-			self.current_playlist = self.sort_playlist(all_songs)
+			if not self.is_restoring:
+				self.current_playlist = self.sort_playlist(all_songs)
+				self.unshuffled_playlist = self.current_playlist.copy()
+				if self.shuffle_enabled:
+					random.shuffle(self.current_playlist)
+
 			self.populate_song_table_from_playlist()
 
 		self.song_table.setSortingEnabled(True)
 
 	def on_album_selected(self, item):
-		from mutagen import File
-
 		genre_item = self.genre_tree.currentItem()
 		artist_item = self.artist_tree.currentItem()
 
@@ -1521,7 +1529,12 @@ class MusicPlayer(QMainWindow):
 						all_songs.extend(self.library[genre][artist][album])
 
 		if all_songs:
-			self.current_playlist = self.sort_playlist(all_songs)
+			if not self.is_restoring:
+				self.current_playlist = self.sort_playlist(all_songs)
+				self.unshuffled_playlist = self.current_playlist.copy()
+				if self.shuffle_enabled:
+					random.shuffle(self.current_playlist)
+
 			self.populate_song_table_from_playlist()
 
 		self.song_table.setSortingEnabled(True)
@@ -1610,7 +1623,6 @@ class MusicPlayer(QMainWindow):
 					break
 
 			if not found_metadata:
-				from mutagen import File
 				try:
 					audio = File(file_path, easy=True)
 					if audio:
@@ -1947,7 +1959,7 @@ class MusicPlayer(QMainWindow):
 		self.add_folder_btn.setEnabled(False)
 		self.rescan_btn.setToolTip("Scanning library in background...")
 		self.show_status_message("Scanning library...")
-		
+
 		# Show throbber
 		self.throbber.show()
 
@@ -1961,7 +1973,7 @@ class MusicPlayer(QMainWindow):
 		self.rescan_btn.setEnabled(True)
 		self.add_folder_btn.setEnabled(True)
 		self.rescan_btn.setToolTip("Rescan library for new files")
-		
+
 		# Hide throbber
 		self.throbber.hide()
 
@@ -2029,9 +2041,6 @@ class MusicPlayer(QMainWindow):
 
 			if current_index != -1 and current_index != self.last_lyric_index:
 				self.last_lyric_index = current_index
-
-				# Highlight the current line
-				from PyQt6.QtGui import QTextCursor, QTextCharFormat
 
 				# Reset all formatting to inactive color
 				cursor = self.lyrics_view.textCursor()
@@ -2103,8 +2112,6 @@ class MusicPlayer(QMainWindow):
 		self.save_settings()
 
 	def on_media_status_changed(self, status):
-		from PyQt6.QtMultimedia import QMediaPlayer
-
 		if status == QMediaPlayer.MediaStatus.EndOfMedia:
 			if self.is_restoring:
 				return
@@ -2121,7 +2128,6 @@ class MusicPlayer(QMainWindow):
 				self.stop()
 
 	def on_genre_double_clicked(self, item):
-		import random
 		genre = item.text(0)
 		self.current_playlist = []
 
@@ -2149,8 +2155,6 @@ class MusicPlayer(QMainWindow):
 			self.play_song(path)
 
 	def on_artist_double_clicked(self, item):
-		import random
-
 		genre_item = self.genre_tree.currentItem()
 		if not genre_item:
 			return
@@ -2196,8 +2200,6 @@ class MusicPlayer(QMainWindow):
 			self.play_song(path)
 
 	def on_album_double_clicked(self, item):
-		import random
-
 		genre_item = self.genre_tree.currentItem()
 		artist_item = self.artist_tree.currentItem()
 
@@ -2325,7 +2327,7 @@ class MusicPlayer(QMainWindow):
 
 					if track_num_display == '0' or track_num_display == '00' or not track_num_display:
 						track_num_display = ""
-					
+
 					try:
 						track_num_sort = int(track_num_display) if track_num_display else 999
 					except ValueError:
@@ -2381,8 +2383,6 @@ class MusicPlayer(QMainWindow):
 			self.song_table.setSortingEnabled(True)
 
 	def restore_selection(self, genre, artist, album, song=None):
-		from PyQt6.QtCore import QTimer
-
 		# Store song for later restoration
 		self._restore_song_path = song
 
@@ -2400,7 +2400,6 @@ class MusicPlayer(QMainWindow):
 
 				# Delay artist selection slightly
 				if artist:
-					from PyQt6.QtCore import QTimer
 					QTimer.singleShot(50, lambda: self._restore_artist(genre, artist, album))
 				break
 
@@ -2414,7 +2413,6 @@ class MusicPlayer(QMainWindow):
 
 				# Delay album selection slightly
 				if album:
-					from PyQt6.QtCore import QTimer
 					QTimer.singleShot(50, lambda: self._restore_album(genre, artist, album))
 				break
 
@@ -2428,7 +2426,6 @@ class MusicPlayer(QMainWindow):
 
 				# Restore selected song if present
 				if hasattr(self, '_restore_song_path') and self._restore_song_path:
-					from PyQt6.QtCore import QTimer
 					QTimer.singleShot(50, lambda: self._restore_song(self._restore_song_path))
 				break
 
@@ -2512,7 +2509,7 @@ class MusicPlayer(QMainWindow):
 		self.dynamic_color_updated.disconnect(self.accent_dialog.update_dynamic_color)
 		self.manual_accent_color = self.accent_dialog.get_color()
 		self.dynamic_accent_color_enabled = self.accent_dialog.get_dynamic_enabled()
-		
+
 		if self.dynamic_accent_color_enabled:
 			# Trigger an update immediately
 			self.update_album_art()
@@ -2563,7 +2560,6 @@ class MusicPlayer(QMainWindow):
 		pixmap = None
 
 		if source and Path(source).exists():
-			from mutagen import File
 			try:
 				audio = File(source)
 				artwork_data = None
@@ -2634,7 +2630,6 @@ class MusicPlayer(QMainWindow):
 			self.show_status_message("No track playing")
 			return
 
-		from mutagen import File
 		try:
 			audio = File(source)
 			lyrics_text = None
@@ -2648,7 +2643,6 @@ class MusicPlayer(QMainWindow):
 				if ext == '.mp3':
 					# Check USLT (Unsynchronized lyrics) in ID3 tags
 					if hasattr(audio, 'tags') and audio.tags:
-						from mutagen.id3 import USLT, SYLT
 						for tag in audio.tags.values():
 							if isinstance(tag, USLT):
 								lyrics_text = tag.text
@@ -2693,7 +2687,6 @@ class MusicPlayer(QMainWindow):
 
 						# Parse LRC for sync if it's an .lrc file
 						if target_file.suffix.lower() == '.lrc':
-							import re
 							lines = lyrics_text.splitlines()
 							self.sync_lyrics = []
 							for line in lines:
@@ -2722,7 +2715,6 @@ class MusicPlayer(QMainWindow):
 			else:
 				# Clean up timestamps from raw text if we aren't using sync
 				if not self.sync_lyrics:
-					import re
 					lyrics_text = re.sub(r'\[\d{2,}:\d{2}[.:]\d{2,}\]', '', lyrics_text)
 
 				# Format and show lyrics
@@ -2732,7 +2724,6 @@ class MusicPlayer(QMainWindow):
 
 				# If sync lyrics, set initial inactive color
 				if self.sync_lyrics:
-					from PyQt6.QtGui import QTextCharFormat
 					inactive_color = QColor("#555555") if self.dark_mode else QColor("#aaaaaa")
 					fmt = QTextCharFormat()
 					fmt.setForeground(inactive_color)
@@ -2747,7 +2738,6 @@ class MusicPlayer(QMainWindow):
 				self.content_stack.setCurrentIndex(1)
 
 		except Exception as e:
-			import traceback
 			traceback.print_exc()
 			print(f"Error checking for lyrics: {e}")
 			self.show_status_message("Error reading lyrics")
@@ -3042,7 +3032,6 @@ class MusicPlayer(QMainWindow):
 			self.progress_slider.setValue(int((new_pos / duration) * 1000))
 
 	def toggle_shuffle(self):
-		import random
 		icon_color = 'white' if self.dark_mode else 'black'
 
 		self.shuffle_enabled = not self.shuffle_enabled
@@ -3057,7 +3046,22 @@ class MusicPlayer(QMainWindow):
 
 			# Shuffle the playlist
 			if self.current_playlist:
+				# Try to keep current song at index 0 so playback continues naturally
+				current_song = self.current_playlist[self.current_track_index] if self.current_track_index < len(self.current_playlist) else None
+
 				random.shuffle(self.current_playlist)
+
+				if current_song:
+					# Find current song in shuffled list and move to front (or just remove and insert)
+					# We use path for comparison to be safe
+					current_path = current_song['path'] if isinstance(current_song, dict) else current_song
+					for i, song in enumerate(self.current_playlist):
+						song_path = song['path'] if isinstance(song, dict) else song
+						if song_path == current_path:
+							self.current_playlist.pop(i)
+							break
+					self.current_playlist.insert(0, current_song)
+
 				self.current_track_index = 0
 		else:
 			# Shuffle off
@@ -3066,9 +3070,22 @@ class MusicPlayer(QMainWindow):
 
 			# Restore original order
 			if self.unshuffled_playlist:
+				current_song = self.current_playlist[self.current_track_index] if self.current_track_index < len(self.current_playlist) else None
 				self.current_playlist = self.unshuffled_playlist.copy()
-				self.current_track_index = 0
 
+				# Find where the current song was in the original order
+				if current_song:
+					current_path = current_song['path'] if isinstance(current_song, dict) else current_song
+					for i, song in enumerate(self.current_playlist):
+						song_path = song['path'] if isinstance(song, dict) else song
+						if song_path == current_path:
+							self.current_track_index = i
+							break
+				else:
+					self.current_track_index = 0
+
+		self.populate_song_table_from_playlist()
+		self.highlight_current_song()
 		self.save_settings()
 
 	def sort_playlist(self, playlist):
@@ -3205,10 +3222,8 @@ class MusicPlayer(QMainWindow):
 
 				# Connect to mediaStatusChanged to seek after loading
 				def on_media_loaded(status):
-					from PyQt6.QtMultimedia import QMediaPlayer
 					if status == QMediaPlayer.MediaStatus.LoadedMedia and hasattr(self, '_pending_seek_position'):
 						# Delay seek slightly to ensure player is ready
-						from PyQt6.QtCore import QTimer
 						QTimer.singleShot(100, lambda: self._finish_restore())
 						# Disconnect this handler
 						self.player.mediaStatusChanged.disconnect(on_media_loaded)
@@ -3243,7 +3258,6 @@ class MusicPlayer(QMainWindow):
 		except Exception as e:
 			self.is_restoring = False
 			print(f"Error restoring playback position: {e}")
-			import traceback
 			traceback.print_exc()
 
 	def _finish_restore(self):
@@ -3253,7 +3267,6 @@ class MusicPlayer(QMainWindow):
 			delattr(self, '_pending_seek_position')
 
 		# Give it a moment before allowing normal status changes to process EndOfMedia
-		from PyQt6.QtCore import QTimer
 		QTimer.singleShot(500, self._clear_restoring_flag)
 
 	def _clear_restoring_flag(self):
@@ -3340,7 +3353,6 @@ if __name__ == '__main__':
 	# This prevents Windows from grouping the app with python.exe
 	if sys.platform == 'win32':
 		try:
-			import ctypes
 			# Set a unique App User Model ID
 			app_id = 'Buzzkill.Music.Player.1.0'
 			ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
