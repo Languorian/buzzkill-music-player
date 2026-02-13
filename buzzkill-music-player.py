@@ -68,9 +68,18 @@ class LibraryDatabase:
 				genre TEXT,
 				tracknumber TEXT,
 				year TEXT,
-				duration INTEGER
+				duration INTEGER,
+				last_position INTEGER DEFAULT 0
 			)
 		''')
+		
+		# Check if last_position column exists (for existing databases)
+		cursor.execute("PRAGMA table_info(songs)")
+		columns = [row[1] for row in cursor.fetchall()]
+		if 'last_position' not in columns:
+			print("Adding last_position column to songs table...")
+			cursor.execute('ALTER TABLE songs ADD COLUMN last_position INTEGER DEFAULT 0')
+
 		cursor.execute('''
 			CREATE TABLE IF NOT EXISTS folders (
 				path TEXT PRIMARY KEY
@@ -81,6 +90,17 @@ class LibraryDatabase:
 		cursor.execute('CREATE INDEX IF NOT EXISTS idx_artist ON songs(artist)')
 		cursor.execute('CREATE INDEX IF NOT EXISTS idx_album ON songs(album)')
 		self.conn.commit()
+
+	def update_song_position(self, path, position):
+		cursor = self.conn.cursor()
+		cursor.execute('UPDATE songs SET last_position=? WHERE path=?', (position, os.path.normpath(path)))
+		self.conn.commit()
+
+	def get_song_by_path(self, path):
+		cursor = self.conn.cursor()
+		cursor.execute('SELECT * FROM songs WHERE path=?', (os.path.normpath(path),))
+		row = cursor.fetchone()
+		return dict(row) if row else None
 
 	def get_folders(self):
 		cursor = self.conn.cursor()
@@ -158,10 +178,8 @@ class LibraryScanner(QThread):
 		conn = sqlite3.connect(self.db_path)
 		cursor = conn.cursor()
 
-		# Full rescan: clear existing songs
-		cursor.execute('DELETE FROM songs')
-
 		audio_extensions = {'.mp3', '.flac', '.ogg', '.wav', '.m4a', '.wma'}
+		found_paths = set()
 
 		for folder_path in self.watched_folders:
 			if not os.path.exists(folder_path):
@@ -170,7 +188,8 @@ class LibraryScanner(QThread):
 			for root, dirs, files in os.walk(folder_path):
 				for file in files:
 					if Path(file).suffix.lower() in audio_extensions:
-						full_path = os.path.join(root, file)
+						full_path = os.path.normpath(os.path.join(root, file))
+						found_paths.add(full_path)
 
 						try:
 							# Read metadata
@@ -190,13 +209,29 @@ class LibraryScanner(QThread):
 							year = audio.get('date', [''])[0] if audio.get('date') else ''
 							duration = audio.info.length if hasattr(audio, 'info') else 0
 
+							# Use ON CONFLICT to update metadata while preserving last_position
 							cursor.execute('''
-								INSERT OR REPLACE INTO songs (path, title, artist, album, genre, tracknumber, year, duration)
+								INSERT INTO songs (path, title, artist, album, genre, tracknumber, year, duration)
 								VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+								ON CONFLICT(path) DO UPDATE SET
+									title=excluded.title,
+									artist=excluded.artist,
+									album=excluded.album,
+									genre=excluded.genre,
+									tracknumber=excluded.tracknumber,
+									year=excluded.year,
+									duration=excluded.duration
 							''', (full_path, title, artist, album, genre, track_num, year, duration))
 
 						except:
 							continue
+
+		# Remove songs that are no longer in the watched folders
+		cursor.execute('SELECT path FROM songs')
+		for row in cursor.fetchall():
+			db_path = row[0]
+			if db_path not in found_paths:
+				cursor.execute('DELETE FROM songs WHERE path=?', (db_path,))
 
 		conn.commit()
 		conn.close()
@@ -1586,15 +1621,39 @@ class MusicPlayer(QMainWindow):
 
 			# If the edited song is the one currently playing, refresh the album art
 			current_source = self.player.source().toLocalFile()
-			if current_source == song_path:
+			if current_source and os.path.normpath(current_source) == os.path.normpath(song_path):
 				self.update_album_art()
 
 			self.rescan_library()
 
 	def play_song(self, file_path):
+			# Normalize input path
+			file_path = os.path.normpath(file_path)
+
+			# Save current song's position before switching if feature is enabled
+			if self.remember_position:
+				current_source = self.player.source().toLocalFile()
+				if current_source and os.path.exists(current_source):
+					self.db.update_song_position(os.path.normpath(current_source), self.player.position())
+
 			icon_color = 'white' if self.dark_mode else 'black'
 
 			self.player.setSource(QUrl.fromLocalFile(file_path))
+
+			# Load and seek if feature is enabled
+			if self.remember_position:
+				song_data = self.db.get_song_by_path(file_path)
+				if song_data and song_data.get('last_position', 0) > 0:
+					target_pos = song_data['last_position']
+
+					def on_loaded(status):
+						if status == QMediaPlayer.MediaStatus.LoadedMedia:
+							# Small delay to ensure player is ready for seeking
+							QTimer.singleShot(100, lambda: self.player.setPosition(target_pos))
+							self.player.mediaStatusChanged.disconnect(on_loaded)
+
+					self.player.mediaStatusChanged.connect(on_loaded)
+
 			self.player.play()
 			self.play_btn.setIcon(self.load_icon('pause.svg', icon_color))
 			self.play_btn.setToolTip("Pause")
@@ -2107,6 +2166,11 @@ class MusicPlayer(QMainWindow):
 			if self.is_restoring:
 				return
 
+			# Reset position in database when song ends
+			current_source = self.player.source().toLocalFile()
+			if current_source:
+				self.db.update_song_position(os.path.normpath(current_source), 0)
+
 			if self.repeat_song:
 				# Replay current song
 				self.player.setPosition(0)
@@ -2355,10 +2419,14 @@ class MusicPlayer(QMainWindow):
 		if self.remember_position and self.current_playlist and self.current_track_index < len(self.current_playlist):
 			current_source = self.player.source().toLocalFile()
 			if current_source:
+				# Save to database for per-song persistence
+				self.db.update_song_position(os.path.normpath(current_source), self.player.position())
+
 				song = self.current_playlist[self.current_track_index]
 				song_path = song['path']
 
 				if os.path.normpath(current_source) == os.path.normpath(song_path):
+					# Still save this file to restore the last session's state (playlist/track)
 					position_data = {
 						'song_path': song,
 						'position': self.player.position(),
@@ -2459,6 +2527,8 @@ class MusicPlayer(QMainWindow):
 	def update_album_art(self):
 		# We always need to know if we have art, even if the label is hidden, for dynamic accent color
 		source = self.player.source().toLocalFile()
+		if source:
+			source = os.path.normpath(source)
 		artwork_found = False
 		pixmap = None
 
@@ -2539,6 +2609,8 @@ class MusicPlayer(QMainWindow):
 			return
 
 		source = self.player.source().toLocalFile()
+		if source:
+			source = os.path.normpath(source)
 		if not source or not os.path.exists(source):
 			self.show_status_message("No track playing")
 			return
@@ -3039,9 +3111,15 @@ class MusicPlayer(QMainWindow):
 			else:
 				self.remember_position_btn.setIcon(self.load_icon('bookmark-off.svg', icon_color))
 				self.remember_position_btn.setToolTip("Remember playback position (Off)")
-				# Clear saved position when disabled
+				
+				# Clear saved position from last session file
 				if self.playback_position_file.exists():
 					self.playback_position_file.unlink()
+				
+				# Clear all per-song positions in database when feature is disabled
+				cursor = self.db.conn.cursor()
+				cursor.execute('UPDATE songs SET last_position = 0')
+				self.db.conn.commit()
 
 			self.save_settings()
 
