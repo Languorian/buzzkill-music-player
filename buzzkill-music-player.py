@@ -3102,6 +3102,17 @@ class MusicPlayer(QMainWindow):
 		super().changeEvent(event)
 
 	def toggle_remember_position(self):
+			if self.remember_position:
+				# Show confirmation dialog when disabling
+				reply = QMessageBox.question(
+					self, 'Confirm Disable',
+					"All saved playback positions will be lost. Are you sure you want to continue?",
+					QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+					QMessageBox.StandardButton.No
+				)
+				if reply == QMessageBox.StandardButton.No:
+					return
+
 			self.remember_position = not self.remember_position
 			icon_color = 'white' if self.dark_mode else 'black'
 
