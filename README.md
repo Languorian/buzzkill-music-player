@@ -1,6 +1,6 @@
 # Buzzkill Music Player
 
-Buzzkill, a desktop music player built with **Python** and **PyQt6**, is a poor MusicBee alternative for ***Linux*** (and ***Windows*** if, for some reason, you don't want to use MusicBee... but why?). Browse your music library and play audio with a simple interface.
+Buzzkill is a poor MusicBee alternative for ***Linux*** (and ***Windows*** if, for some reason, you don't want to use MusicBee). Browse your music library and play audio with a simple interface.
 
 ![Screenshot on Windows 11](screenshots/screenshot-01.jpg)
 
